@@ -12,3 +12,5 @@ RUN groupadd -g 1000 dev \
  && useradd -g 1000 -u 1000 -m -s /bin/bash dev
 
 USER dev
+
+RUN rustup component add rustfmt
