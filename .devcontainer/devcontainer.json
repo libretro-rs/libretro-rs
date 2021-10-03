@@ -1,0 +1,6 @@
+{
+  "dockerFile": "Dockerfile",
+  "extensions": [
+    "matklad.rust-analyzer"
+  ]
+}
