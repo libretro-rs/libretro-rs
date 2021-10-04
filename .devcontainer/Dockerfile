@@ -1,7 +1,9 @@
 FROM rust:buster
 
 RUN apt -y update && apt -y install --no-install-recommends --no-install-suggests \
+        clang \
         git \
+        libclang-dev \
         nano \
         ssh \
  && apt -y autoremove \
@@ -13,4 +15,5 @@ RUN groupadd -g 1000 dev \
 
 USER dev
 
-RUN rustup component add rustfmt
+RUN cargo install bindgen \
+ && rustup component add rustfmt
