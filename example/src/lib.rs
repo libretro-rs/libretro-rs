@@ -33,11 +33,17 @@ impl RetroCore for Emulator {
     println!("[libretro_rs] run()");
   }
 
-  fn load_game(&mut self, game: &RetroGame) {
+  fn load_game(&mut self, game: RetroGame) {
     match game {
-      RetroGame::None => println!("[libretro] load_game()"),
-      RetroGame::Data(_) => println!("[libretro] load_game(&[...])"),
-      RetroGame::Path(_) => println!("[libretro] load_game(\"...\")"),
+      RetroGame::None => {
+        println!("[libretro] load_game()");
+      }
+      RetroGame::Data(_) => {
+        println!("[libretro] load_game(&[...])");
+      }
+      RetroGame::Path(s) => {
+        println!("[libretro] load_game({})", s);
+      }
     }
   }
 }
