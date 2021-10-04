@@ -6,7 +6,7 @@ A reference implementation is available in the `example` folder, and should be e
 
 ```toml
 [dependencies]
-libretro_rs = "0.1"
+libretro-rs = "0.1"
 
 [lib]
 crate-type = ["cdylib"]
