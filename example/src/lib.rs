@@ -21,8 +21,8 @@ impl RetroCore for Emulator {
     println!("[libretro_rs] get_system_av_info()");
   }
 
-  fn set_controller_port_device(&mut self, port: u32, device: u32) {
-    println!("[libretro_rs] set_controller_port_device({}, {})", port, device);
+  fn set_controller_port_device(&mut self, port: u32, device: RetroDevice) {
+    println!("[libretro_rs] set_controller_port_device({}, {:?})", port, device);
   }
 
   fn reset(&mut self) {

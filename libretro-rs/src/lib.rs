@@ -4,6 +4,7 @@ use std::ffi::CStr;
 
 pub use libc;
 
+pub mod core_macro;
 pub mod sys;
 
 use libc::c_void;
@@ -12,11 +13,11 @@ use sys::*;
 pub trait RetroCore {
   fn new(env: &RetroEnvironment) -> Self;
 
-  fn get_system_info(info: &mut crate::sys::retro_system_info);
+  fn get_system_info(info: &mut retro_system_info);
 
-  fn get_system_av_info(&self, info: &mut crate::sys::retro_system_av_info);
+  fn get_system_av_info(&self, info: &mut retro_system_av_info);
 
-  fn set_controller_port_device(&mut self, port: u32, device: u32);
+  fn set_controller_port_device(&mut self, port: u32, device: RetroDevice);
 
   fn reset(&mut self);
 
@@ -40,14 +41,14 @@ pub trait RetroCore {
 
   fn load_game(&mut self, game: RetroGame) -> bool;
 
-  fn load_game_special(&mut self, game_type: u32, info: &sys::retro_game_info, num_info: usize) -> bool {
+  fn load_game_special(&mut self, game_type: u32, info: RetroGame, num_info: usize) -> bool {
     false
   }
 
   fn unload_game(&mut self) {}
 
-  fn get_region(&self) -> u32 {
-    RETRO_REGION_NTSC
+  fn get_region(&self) -> RetroRegion {
+    RetroRegion::NTSC
   }
 
   fn get_memory_data(&mut self, id: u32) -> *mut () {
@@ -59,6 +60,51 @@ pub trait RetroCore {
   }
 }
 
+#[derive(Debug)]
+pub enum RetroDevice {
+  None = 0,
+  Joypad = 1,
+  Mouse = 2,
+  Keyboard = 3,
+  LightGun = 4,
+  Analog = 5,
+  Pointer = 6,
+}
+
+impl From<u32> for RetroDevice {
+  fn from(val: u32) -> Self {
+    match val {
+      0 => Self::None,
+      1 => Self::Joypad,
+      2 => Self::Mouse,
+      3 => Self::Keyboard,
+      4 => Self::LightGun,
+      5 => Self::Analog,
+      6 => Self::Pointer,
+      _ => panic!("unrecognized device type. type={}", val),
+    }
+  }
+}
+
+pub enum RetroJoypadButton {
+  B = 0,
+  Y = 1,
+  Select = 2,
+  Start = 3,
+  Up = 4,
+  Down = 5,
+  Left = 6,
+  Right = 7,
+  A = 8,
+  X = 9,
+  L = 10,
+  R = 11,
+  L2 = 12,
+  R2 = 13,
+  L3 = 14,
+  R3 = 15,
+}
+
 pub struct RetroEnvironment(retro_environment_t);
 
 impl RetroEnvironment {
@@ -66,8 +112,34 @@ impl RetroEnvironment {
     RetroEnvironment(cb)
   }
 
+  /* Commands */
+
+  pub fn shutdown(&self) -> bool {
+    unsafe {
+      (self.0.unwrap())(RETRO_ENVIRONMENT_SHUTDOWN, std::ptr::null_mut())
+    }
+  }
+
+  /* Queries */
+
+  pub fn get_libretro_path(&self) -> Option<&str> {
+    self.get_str(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH)
+  }
+
+  pub fn get_core_assets_directory(&self) -> Option<&str> {
+    self.get_str(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY)
+  }
+
+  pub fn get_save_directory(&self) -> Option<&str> {
+    self.get_str(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY)
+  }
+
   pub fn get_system_directory(&self) -> Option<&str> {
     self.get_str(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
+  }
+
+  pub fn get_username(&self) -> Option<&str> {
+    self.get_str(RETRO_ENVIRONMENT_GET_USERNAME)
   }
 
   fn get_str<'a>(&'a self, key: u32) -> Option<&'a str> {
@@ -79,7 +151,7 @@ impl RetroEnvironment {
 
   unsafe fn get<T>(&self, key: u32) -> Option<*const T> {
     let mut val: *const T = std::ptr::null();
-    if self.get_raw(key, &mut val) {
+    if self.get_raw(key, &mut val) && !val.is_null() {
       Some(val)
     } else {
       None
@@ -124,187 +196,148 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
   }
 }
 
-#[macro_export]
-macro_rules! libretro_core {
-  ($core:path) => {
-    static mut RETRO_INSTANCE: RetroInstance<$core> = RetroInstance {
-      environment: None,
-      audio_sample: None,
-      audio_sample_batch: None,
-      input_poll: None,
-      input_state: None,
-      video_refresh: None,
-      core: None,
-    };
+pub enum RetroRegion {
+  NTSC = 0,
+  PAL = 1,
+}
 
-    struct RetroInstance<T: RetroCore> {
-      environment: libretro_rs::sys::retro_environment_t,
-      audio_sample: libretro_rs::sys::retro_audio_sample_t,
-      audio_sample_batch: libretro_rs::sys::retro_audio_sample_batch_t,
-      input_poll: libretro_rs::sys::retro_input_poll_t,
-      input_state: libretro_rs::sys::retro_input_state_t,
-      video_refresh: libretro_rs::sys::retro_video_refresh_t,
-      core: Option<T>,
+impl Into<u32> for RetroRegion {
+  fn into(self) -> u32 {
+    match self {
+      Self::NTSC => 0,
+      Self::PAL => 1,
     }
+  }
+}
 
-    #[no_mangle]
-    extern "C" fn retro_api_version() -> libretro_rs::libc::c_uint {
-      libretro_rs::sys::RETRO_API_VERSION
-    }
+/// This is the glue layer between a `RetroCore` implementation, and the `libretro` API.
+pub struct RetroInstance<T: RetroCore> {
+  pub core: Option<T>,
+  pub audio_sample: retro_audio_sample_t,
+  pub audio_sample_batch: retro_audio_sample_batch_t,
+  pub environment: retro_environment_t,
+  pub input_poll: retro_input_poll_t,
+  pub input_state: retro_input_state_t,
+  pub video_refresh: retro_video_refresh_t,
+}
 
-    #[no_mangle]
-    extern "C" fn retro_get_system_info(info: &mut libretro_rs::sys::retro_system_info) {
-      <$core>::get_system_info(info)
-    }
+impl<T: RetroCore> RetroInstance<T> {
+  pub fn on_get_system_info(&self, info: &mut retro_system_info) {
+    T::get_system_info(info)
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_get_system_av_info(info: &mut libretro_rs::sys::retro_system_av_info) {
-      core_ref(|core| core.get_system_av_info(info))
-    }
+  pub fn on_get_system_av_info(&self, info: &mut retro_system_av_info) {
+    self.core_ref(|core| core.get_system_av_info(info))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_init() {
-      instance_mut(|instance| {
-        let env = libretro_rs::RetroEnvironment::new(instance.environment);
-        instance.core = Some(<$core>::new(&env))
-      })
-    }
+  pub fn on_init(&mut self) {
+    let env = RetroEnvironment::new(self.environment);
+    self.core = Some(T::new(&env))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_deinit() {
-      instance_mut(|instance| {
-        instance.environment = None;
-        instance.audio_sample = None;
-        instance.audio_sample_batch = None;
-        instance.input_poll = None;
-        instance.input_state = None;
-        instance.video_refresh = None;
-        instance.core = None;
-      })
-    }
+  pub fn on_deinit(&mut self) {
+    self.core = None;
+    self.audio_sample = None;
+    self.audio_sample_batch = None;
+    self.environment = None;
+    self.input_poll = None;
+    self.input_state = None;
+    self.video_refresh = None;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_environment(cb: libretro_rs::sys::retro_environment_t) {
-      instance_mut(|instance| instance.environment = cb)
-    }
+  pub fn on_set_environment(&mut self, cb: retro_environment_t) {
+    self.environment = cb;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_audio_sample(cb: libretro_rs::sys::retro_audio_sample_t) {
-      instance_mut(|instance| instance.audio_sample = cb)
-    }
+  pub fn on_set_audio_sample(&mut self, cb: retro_audio_sample_t) {
+    self.audio_sample = cb;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_audio_sample_batch(cb: libretro_rs::sys::retro_audio_sample_batch_t) {
-      instance_mut(|instance| instance.audio_sample_batch = cb)
-    }
+  pub fn on_set_audio_sample_batch(&mut self, cb: retro_audio_sample_batch_t) {
+    self.audio_sample_batch = cb;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_input_poll(cb: libretro_rs::sys::retro_input_poll_t) {
-      instance_mut(|instance| instance.input_poll = cb)
-    }
+  pub fn on_set_input_poll(&mut self, cb: retro_input_poll_t) {
+    self.input_poll = cb;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_input_state(cb: libretro_rs::sys::retro_input_state_t) {
-      instance_mut(|instance| instance.input_state = cb)
-    }
+  pub fn on_set_input_state(&mut self, cb: retro_input_state_t) {
+    self.input_state = cb;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_video_refresh(cb: libretro_rs::sys::retro_video_refresh_t) {
-      instance_mut(|instance| instance.video_refresh = cb)
-    }
+  pub fn on_set_video_refresh(&mut self, cb: retro_video_refresh_t) {
+    self.video_refresh = cb;
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_set_controller_port_device(port: libretro_rs::libc::c_uint, device: libretro_rs::libc::c_uint) {
-      core_mut(|core| core.set_controller_port_device(port, device))
-    }
+  pub fn on_set_controller_port_device(&mut self, port: libc::c_uint, device: libc::c_uint) {
+    self.core_mut(|core| core.set_controller_port_device(port, device.into()))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_reset() {
-      core_mut(|core| core.reset())
-    }
+  pub fn on_reset(&mut self) {
+    self.core_mut(|core| core.reset())
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_run() {
-      core_mut(|core| core.run())
-    }
+  pub fn on_run(&mut self) {
+    self.core_mut(|core| core.run())
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_serialize_size() -> libretro_rs::libc::size_t {
-      core_ref(|core| core.serialize_size())
-    }
+  pub fn on_serialize_size(&self) -> libc::size_t {
+    self.core_ref(|core| core.serialize_size())
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_serialize(data: *mut (), size: libretro_rs::libc::size_t) -> bool {
-      core_ref(|core| core.serialize(data, size))
-    }
+  pub fn on_serialize(&self, data: *mut (), size: libc::size_t) -> bool {
+    self.core_ref(|core| core.serialize(data, size))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_unserialize(data: *const (), size: libretro_rs::libc::size_t) -> bool {
-      core_mut(|core| core.unserialize(data, size))
-    }
+  pub fn on_unserialize(&mut self, data: *const (), size: libc::size_t) -> bool {
+    self.core_mut(|core| core.unserialize(data, size))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_cheat_reset() {
-      core_mut(|core| core.cheat_reset())
-    }
+  pub fn on_cheat_reset(&mut self) {
+    self.core_mut(|core| core.cheat_reset())
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_cheat_set(index: libretro_rs::libc::c_uint, enabled: bool, code: *const libretro_rs::libc::c_char) {
-      core_mut(|core| core.cheat_set(index, enabled, code))
-    }
+  pub fn on_cheat_set(&mut self, index: libc::c_uint, enabled: bool, code: *const libc::c_char) {
+    self.core_mut(|core| core.cheat_set(index, enabled, code))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_load_game(game: &libretro_rs::sys::retro_game_info) -> bool {
-      core_mut(|core| core.load_game(game.into()))
-    }
+  pub fn on_load_game(&mut self, game: &retro_game_info) -> bool {
+    self.core_mut(|core| core.load_game(game.into()))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_load_game_special(
-      game_type: libretro_rs::libc::c_uint,
-      info: &libretro_rs::sys::retro_game_info,
-      num_info: libretro_rs::libc::size_t,
-    ) -> bool {
-      core_mut(|core| core.load_game_special(game_type, info, num_info))
-    }
+  pub fn on_load_game_special(&mut self, game_type: libc::c_uint, info: &retro_game_info, num_info: libc::size_t) -> bool {
+    self.core_mut(|core| core.load_game_special(game_type, info.into(), num_info))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_unload_game() {
-      core_mut(|core| core.unload_game())
-    }
+  pub fn on_unload_game(&mut self) {
+    self.core_mut(|core| core.unload_game())
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_get_region() -> libretro_rs::libc::c_uint {
-      core_ref(|core| core.get_region())
-    }
+  pub fn on_get_region(&self) -> libc::c_uint {
+    self.core_ref(|core| core.get_region().into())
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_get_memory_data(id: libretro_rs::libc::c_uint) -> *mut () {
-      core_mut(|core| core.get_memory_data(id))
-    }
+  pub fn on_get_memory_data(&mut self, id: libc::c_uint) -> *mut () {
+    self.core_mut(|core| core.get_memory_data(id))
+  }
 
-    #[no_mangle]
-    extern "C" fn retro_get_memory_size(id: libretro_rs::libc::c_uint) -> libretro_rs::libc::size_t {
-      core_ref(|core| core.get_memory_size(id))
-    }
+  pub fn on_get_memory_size(&mut self, id: libc::c_uint) -> libc::size_t {
+    self.core_mut(|core| core.get_memory_size(id))
+  }
 
-    #[inline]
-    fn core_ref<T>(f: impl FnOnce(&$core) -> T) -> T {
-      instance_ref(|instance| f(instance.core.as_ref().unwrap()))
-    }
+  #[inline]
+  fn core_mut<F, Output>(&mut self, f: F) -> Output
+  where
+    F: FnOnce(&mut T) -> Output,
+  {
+    f(self.core.as_mut().unwrap())
+  }
 
-    #[inline]
-    fn core_mut<T>(f: impl FnOnce(&mut $core) -> T) -> T {
-      instance_mut(|instance| f(instance.core.as_mut().unwrap()))
-    }
-
-    #[inline]
-    fn instance_ref<T>(f: impl FnOnce(&RetroInstance<$core>) -> T) -> T {
-      unsafe { f(&RETRO_INSTANCE) }
-    }
-
-    #[inline]
-    fn instance_mut<T>(f: impl FnOnce(&mut RetroInstance<$core>) -> T) -> T {
-      unsafe { f(&mut RETRO_INSTANCE) }
-    }
-  };
+  #[inline]
+  fn core_ref<F, Output>(&self, f: F) -> Output
+  where
+    F: FnOnce(&T) -> Output,
+  {
+    f(self.core.as_ref().unwrap())
+  }
 }
