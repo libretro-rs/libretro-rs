@@ -1,4 +1,4 @@
-use libretro_rs::{libretro_core, RetroCore};
+use libretro_rs::*;
 
 pub struct Emulator;
 
@@ -33,8 +33,12 @@ impl RetroCore for Emulator {
     println!("[libretro_rs] run()");
   }
 
-  fn load_game(&mut self, _: &libretro_rs::sys::retro_game_info) {
-    println!("[libretro_rs] load_game()");
+  fn load_game(&mut self, game: &RetroGame) {
+    match game {
+      RetroGame::None => println!("[libretro] load_game()"),
+      RetroGame::Data(_) => println!("[libretro] load_game(&[...])"),
+      RetroGame::Path(_) => println!("[libretro] load_game(\"...\")"),
+    }
   }
 }
 

@@ -32,7 +32,7 @@ pub trait RetroCore {
 
   fn cheat_set(&mut self, index: u32, enabled: bool, code: *const libc::c_char) {}
 
-  fn load_game(&mut self, game: &sys::retro_game_info);
+  fn load_game(&mut self, game: &RetroGame);
 
   fn load_game_special(&mut self, game_type: u32, info: &sys::retro_game_info, num_info: usize) {
   }
@@ -83,6 +83,39 @@ impl RetroEnvironment {
 
   unsafe fn get_raw<T>(&self, key: u32, output: *mut *const T) -> bool {
     self.0.unwrap()(key, output as *mut c_void)
+  }
+}
+
+pub enum RetroGame<'a> {
+  None,
+  Data(&'a [u8]),
+  Path(&'a str),
+}
+
+impl<'a> From<&retro_game_info> for RetroGame<'a> {
+  fn from(game: &retro_game_info) -> RetroGame<'a> {
+    if game.path.is_null() && game.data.is_null() {
+      return RetroGame::None
+    }
+
+    if !game.path.is_null() {
+      unsafe {
+        let path = game.path;
+        let path = CStr::from_ptr(path).to_str().unwrap();
+        return RetroGame::Path(path)
+      }
+    }
+
+    if !game.data.is_null() {
+      unsafe {
+        let data = game.data;
+        let size = game.size;
+        let data = std::slice::from_raw_parts(data as *const u8, size);
+        return RetroGame::Data(data)
+      }
+    }
+
+    unreachable!("`game_info` has a `path` and a `data` field.")
   }
 }
 
@@ -217,7 +250,7 @@ macro_rules! libretro_core {
 
     #[no_mangle]
     extern "C" fn retro_load_game(game: &libretro_rs::sys::retro_game_info) {
-      core_mut(|core| core.load_game(game))
+      core_mut(|core| core.load_game(&game.into()))
     }
 
     #[no_mangle]
