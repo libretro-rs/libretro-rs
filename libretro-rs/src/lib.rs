@@ -38,9 +38,11 @@ pub trait RetroCore {
 
   fn cheat_set(&mut self, index: u32, enabled: bool, code: *const libc::c_char) {}
 
-  fn load_game(&mut self, game: RetroGame);
+  fn load_game(&mut self, game: RetroGame) -> bool;
 
-  fn load_game_special(&mut self, game_type: u32, info: &sys::retro_game_info, num_info: usize) {}
+  fn load_game_special(&mut self, game_type: u32, info: &sys::retro_game_info, num_info: usize) -> bool {
+    false
+  }
 
   fn unload_game(&mut self) {}
 
@@ -252,7 +254,7 @@ macro_rules! libretro_core {
     }
 
     #[no_mangle]
-    extern "C" fn retro_load_game(game: &libretro_rs::sys::retro_game_info) {
+    extern "C" fn retro_load_game(game: &libretro_rs::sys::retro_game_info) -> bool {
       core_mut(|core| core.load_game(game.into()))
     }
 
@@ -261,7 +263,7 @@ macro_rules! libretro_core {
       game_type: libretro_rs::libc::c_uint,
       info: &libretro_rs::sys::retro_game_info,
       num_info: libretro_rs::libc::size_t,
-    ) {
+    ) -> bool {
       core_mut(|core| core.load_game_special(game_type, info, num_info))
     }
 
