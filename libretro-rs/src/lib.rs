@@ -137,9 +137,7 @@ impl RetroEnvironment {
 
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   pub fn shutdown(&self) -> bool {
-    unsafe {
-      (self.0.unwrap())(RETRO_ENVIRONMENT_SHUTDOWN, std::ptr::null_mut())
-    }
+    unsafe { (self.0.unwrap())(RETRO_ENVIRONMENT_SHUTDOWN, std::ptr::null_mut()) }
   }
 
   /* Queries */
@@ -200,36 +198,47 @@ impl RetroEnvironment {
 
 /// Represents the possible ways that a frontend can pass game information to a core.
 pub enum RetroGame<'a> {
-  /// Passed if a core supports "no game" mode and no game was selected.
-  None,
-  /// Passed if a core doesn't need paths, and a game was selected.
-  /// The slice contains the entire contents of the game.
-  Data(&'a [u8]),
-  /// Passed if a core does need paths, and a game was selected.
-  /// The slice contains the entire absolute path of the game.
-  Path(&'a str),
+  /// Used if a core supports "no game" and no game was selected.
+  ///
+  /// * `meta` contains implementation-specific metadata, if present.
+  ///
+  /// **Note**: "No game" support is hinted with the `RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME` key.
+  None { meta: Option<&'a str> },
+  /// Used if a core doesn't need paths, and a game was selected.
+  ///
+  /// * `meta` contains implementation-specific metadata, if present.
+  /// * `data` contains the entire contents of the game.
+  Data { meta: Option<&'a str>, data: &'a [u8] },
+  /// Used if a core needs paths, and a game was selected.
+  ///
+  /// * `meta` contains implementation-specific metadata, if present.
+  /// * `path` contains the entire absolute path of the game.
+  Path { meta: Option<&'a str>, path: &'a str },
 }
 
 impl<'a> From<&retro_game_info> for RetroGame<'a> {
   fn from(game: &retro_game_info) -> RetroGame<'a> {
+    let meta = if game.meta.is_null() {
+      None
+    } else {
+      unsafe { CStr::from_ptr(game.meta).to_str().ok() }
+    };
+
     if game.path.is_null() && game.data.is_null() {
-      return RetroGame::None;
+      return RetroGame::None { meta };
     }
 
     if !game.path.is_null() {
       unsafe {
-        let path = game.path;
-        let path = CStr::from_ptr(path).to_str().unwrap();
-        return RetroGame::Path(path);
+        let path = CStr::from_ptr(game.path).to_str().unwrap();
+        return RetroGame::Path { meta, path };
       }
     }
 
     if !game.data.is_null() {
       unsafe {
-        let data = game.data;
-        let size = game.size;
-        let data = std::slice::from_raw_parts(data as *const u8, size);
-        return RetroGame::Data(data);
+        let data = std::slice::from_raw_parts(game.data as *const u8, game.size);
+        return RetroGame::Data { meta, data };
       }
     }
 

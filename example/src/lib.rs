@@ -35,15 +35,15 @@ impl RetroCore for Emulator {
 
   fn load_game(&mut self, game: RetroGame) -> bool {
     match game {
-      RetroGame::None => {
+      RetroGame::None { .. } => {
         println!("[libretro_rs] load_game()");
         false
       }
-      RetroGame::Data(_) => {
+      RetroGame::Data { .. } => {
         println!("[libretro_rs] load_game(&[...])");
         true
       }
-      RetroGame::Path(path) => {
+      RetroGame::Path { path, .. } => {
         println!("[libretro_rs] load_game({})", path);
         true
       }
