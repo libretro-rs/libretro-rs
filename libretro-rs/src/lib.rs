@@ -60,20 +60,19 @@ impl RetroEnvironment {
     RetroEnvironment(cb)
   }
 
-  pub fn get_system_directory(&self) -> Option<String> {
-    self.get_string(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
+  pub fn get_system_directory(&self) -> Option<&str> {
+    self.get_str(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
   }
 
-  fn get_string(&self, key: u32) -> Option<String> {
+  fn get_str<'a>(&'a self, key: u32) -> Option<&'a str> {
     unsafe {
       let s = self.get(key)?;
-      let s = CStr::from_ptr(s).to_str().ok()?;
-      Some(s.into())
+      CStr::from_ptr(s).to_str().ok()
     }
   }
 
   unsafe fn get<T>(&self, key: u32) -> Option<*const T> {
-    let mut val = std::ptr::null();
+    let mut val: *const T = std::ptr::null();
     if self.get_raw(key, &mut val) {
       Some(val)
     } else {
@@ -122,7 +121,7 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
 #[macro_export]
 macro_rules! libretro_core {
   ($core:path) => {
-    static mut RETRO_CONTEXT: RetroContext<$core> = RetroContext {
+    static mut RETRO_INSTANCE: RetroInstance<$core> = RetroInstance {
       environment: None,
       audio_sample: None,
       audio_sample_batch: None,
@@ -132,7 +131,7 @@ macro_rules! libretro_core {
       core: None,
     };
 
-    struct RetroContext<T: RetroCore> {
+    struct RetroInstance<T: RetroCore> {
       environment: libretro_rs::sys::retro_environment_t,
       audio_sample: libretro_rs::sys::retro_audio_sample_t,
       audio_sample_batch: libretro_rs::sys::retro_audio_sample_batch_t,
@@ -159,53 +158,53 @@ macro_rules! libretro_core {
 
     #[no_mangle]
     extern "C" fn retro_init() {
-      context_mut(|ctx| {
-        let env = libretro_rs::RetroEnvironment::new(ctx.environment);
-        ctx.core = Some(<$core>::new(&env))
+      instance_mut(|instance| {
+        let env = libretro_rs::RetroEnvironment::new(instance.environment);
+        instance.core = Some(<$core>::new(&env))
       })
     }
 
     #[no_mangle]
     extern "C" fn retro_deinit() {
-      context_mut(|ctx| {
-        ctx.environment = None;
-        ctx.audio_sample = None;
-        ctx.audio_sample_batch = None;
-        ctx.input_poll = None;
-        ctx.input_state = None;
-        ctx.video_refresh = None;
-        ctx.core = None;
+      instance_mut(|instance| {
+        instance.environment = None;
+        instance.audio_sample = None;
+        instance.audio_sample_batch = None;
+        instance.input_poll = None;
+        instance.input_state = None;
+        instance.video_refresh = None;
+        instance.core = None;
       })
     }
 
     #[no_mangle]
     extern "C" fn retro_set_environment(cb: libretro_rs::sys::retro_environment_t) {
-      context_mut(|ctx| ctx.environment = cb)
+      instance_mut(|instance| instance.environment = cb)
     }
 
     #[no_mangle]
     extern "C" fn retro_set_audio_sample(cb: libretro_rs::sys::retro_audio_sample_t) {
-      context_mut(|ctx| ctx.audio_sample = cb)
+      instance_mut(|instance| instance.audio_sample = cb)
     }
 
     #[no_mangle]
     extern "C" fn retro_set_audio_sample_batch(cb: libretro_rs::sys::retro_audio_sample_batch_t) {
-      context_mut(|ctx| ctx.audio_sample_batch = cb)
+      instance_mut(|instance| instance.audio_sample_batch = cb)
     }
 
     #[no_mangle]
     extern "C" fn retro_set_input_poll(cb: libretro_rs::sys::retro_input_poll_t) {
-      context_mut(|ctx| ctx.input_poll = cb)
+      instance_mut(|instance| instance.input_poll = cb)
     }
 
     #[no_mangle]
     extern "C" fn retro_set_input_state(cb: libretro_rs::sys::retro_input_state_t) {
-      context_mut(|ctx| ctx.input_state = cb)
+      instance_mut(|instance| instance.input_state = cb)
     }
 
     #[no_mangle]
     extern "C" fn retro_set_video_refresh(cb: libretro_rs::sys::retro_video_refresh_t) {
-      context_mut(|ctx| ctx.video_refresh = cb)
+      instance_mut(|instance| instance.video_refresh = cb)
     }
 
     #[no_mangle]
@@ -280,25 +279,25 @@ macro_rules! libretro_core {
 
     #[inline]
     fn core_ref<T>(f: impl FnOnce(&$core) -> T) -> T {
-      context_ref(|ctx| f(ctx.core.as_ref().unwrap()))
+      instance_ref(|instance| f(instance.core.as_ref().unwrap()))
     }
 
     #[inline]
     fn core_mut<T>(f: impl FnOnce(&mut $core) -> T) -> T {
-      context_mut(|ctx| (f)(ctx.core.as_mut().unwrap()))
+      instance_mut(|instance| f(instance.core.as_mut().unwrap()))
     }
 
     #[inline]
-    fn context_ref<T>(f: impl FnOnce(&RetroContext<$core>) -> T) -> T {
+    fn instance_ref<T>(f: impl FnOnce(&RetroInstance<$core>) -> T) -> T {
       unsafe {
-        (f)(&RETRO_CONTEXT)
+        f(&RETRO_INSTANCE)
       }
     }
 
     #[inline]
-    fn context_mut<T>(f: impl FnOnce(&mut RetroContext<$core>) -> T) -> T {
+    fn instance_mut<T>(f: impl FnOnce(&mut RetroInstance<$core>) -> T) -> T {
       unsafe {
-        (f)(&mut RETRO_CONTEXT)
+        f(&mut RETRO_INSTANCE)
       }
     }
   }

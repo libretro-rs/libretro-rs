@@ -6,9 +6,9 @@ impl RetroCore for Emulator {
   fn new(env: &libretro_rs::RetroEnvironment) -> Self {
     println!("[libretro_rs] new()");
 
-    let system_dir = env.get_system_directory().unwrap_or("/opt/games/sony/playstation".into());
+    let system_dir = env.get_system_directory().unwrap_or("~/.config/emulator");
 
-    println!("[libretro_rs] system_dir={}", &system_dir);
+    println!("[libretro_rs] system_dir={}", system_dir);
 
     Emulator
   }
