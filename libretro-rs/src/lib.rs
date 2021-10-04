@@ -40,7 +40,7 @@ pub trait RetroCore {
   fn unload_game(&mut self) {
   }
 
-  fn get_region(&mut self) -> u32 {
+  fn get_region(&self) -> u32 {
     RETRO_REGION_NTSC
   }
 
@@ -48,7 +48,7 @@ pub trait RetroCore {
     std::ptr::null_mut()
   }
 
-  fn get_memory_size(&mut self, id: u32) -> usize {
+  fn get_memory_size(&self, id: u32) -> usize {
     0
   }
 }
@@ -110,135 +110,163 @@ macro_rules! libretro_core {
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_api_version() -> libretro_rs::libc::c_uint {
+    extern "C" fn retro_api_version() -> libretro_rs::libc::c_uint {
       libretro_rs::sys::RETRO_API_VERSION
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_get_system_info(info: &mut libretro_rs::sys::retro_system_info) {
+    extern "C" fn retro_get_system_info(info: &mut libretro_rs::sys::retro_system_info) {
       <$core>::get_system_info(info)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_get_system_av_info(info: &mut libretro_rs::sys::retro_system_av_info) {
-      RETRO_CONTEXT.core.as_ref().unwrap().get_system_av_info(info)
+    extern "C" fn retro_get_system_av_info(info: &mut libretro_rs::sys::retro_system_av_info) {
+      core_ref(|core| core.get_system_av_info(info))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_init() {
-      let env = libretro_rs::RetroEnvironment::new(RETRO_CONTEXT.environment);
-      RETRO_CONTEXT.core = Some(<$core>::new(&env))
+    extern "C" fn retro_init() {
+      context_mut(|ctx| {
+        let env = libretro_rs::RetroEnvironment::new(ctx.environment);
+        ctx.core = Some(<$core>::new(&env))
+      })
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_deinit() {
-      RETRO_CONTEXT.environment = None;
-      RETRO_CONTEXT.audio_sample = None;
-      RETRO_CONTEXT.audio_sample_batch = None;
-      RETRO_CONTEXT.input_poll = None;
-      RETRO_CONTEXT.input_state = None;
-      RETRO_CONTEXT.video_refresh = None;
-      RETRO_CONTEXT.core = None;
+    extern "C" fn retro_deinit() {
+      context_mut(|ctx| {
+        ctx.environment = None;
+        ctx.audio_sample = None;
+        ctx.audio_sample_batch = None;
+        ctx.input_poll = None;
+        ctx.input_state = None;
+        ctx.video_refresh = None;
+        ctx.core = None;
+      })
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_environment(cb: libretro_rs::sys::retro_environment_t) {
-      RETRO_CONTEXT.environment = cb
+    extern "C" fn retro_set_environment(cb: libretro_rs::sys::retro_environment_t) {
+      context_mut(|ctx| ctx.environment = cb)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_audio_sample(cb: libretro_rs::sys::retro_audio_sample_t) {
-      RETRO_CONTEXT.audio_sample = cb
+    extern "C" fn retro_set_audio_sample(cb: libretro_rs::sys::retro_audio_sample_t) {
+      context_mut(|ctx| ctx.audio_sample = cb)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_audio_sample_batch(cb: libretro_rs::sys::retro_audio_sample_batch_t) {
-      RETRO_CONTEXT.audio_sample_batch = cb
+    extern "C" fn retro_set_audio_sample_batch(cb: libretro_rs::sys::retro_audio_sample_batch_t) {
+      context_mut(|ctx| ctx.audio_sample_batch = cb)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_input_poll(cb: libretro_rs::sys::retro_input_poll_t) {
-      RETRO_CONTEXT.input_poll = cb
+    extern "C" fn retro_set_input_poll(cb: libretro_rs::sys::retro_input_poll_t) {
+      context_mut(|ctx| ctx.input_poll = cb)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_input_state(cb: libretro_rs::sys::retro_input_state_t) {
-      RETRO_CONTEXT.input_state = cb
+    extern "C" fn retro_set_input_state(cb: libretro_rs::sys::retro_input_state_t) {
+      context_mut(|ctx| ctx.input_state = cb)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_video_refresh(cb: libretro_rs::sys::retro_video_refresh_t) {
-      RETRO_CONTEXT.video_refresh = cb
+    extern "C" fn retro_set_video_refresh(cb: libretro_rs::sys::retro_video_refresh_t) {
+      context_mut(|ctx| ctx.video_refresh = cb)
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_set_controller_port_device(port: libretro_rs::libc::c_uint, device: libretro_rs::libc::c_uint) {
-      RETRO_CONTEXT.core.as_mut().unwrap().set_controller_port_device(port, device)
+    extern "C" fn retro_set_controller_port_device(port: libretro_rs::libc::c_uint, device: libretro_rs::libc::c_uint) {
+      core_mut(|core| core.set_controller_port_device(port, device))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_reset() {
-      RETRO_CONTEXT.core.as_mut().unwrap().reset()
+    extern "C" fn retro_reset() {
+      core_mut(|core| core.reset())
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_run() {
-      RETRO_CONTEXT.core.as_mut().unwrap().run()
+    extern "C" fn retro_run() {
+      core_mut(|core| core.run())
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_serialize_size() -> libretro_rs::libc::size_t {
-      RETRO_CONTEXT.core.as_ref().unwrap().serialize_size()
+    extern "C" fn retro_serialize_size() -> libretro_rs::libc::size_t {
+      core_ref(|core| core.serialize_size())
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_serialize(data: *mut (), size: libretro_rs::libc::size_t) -> bool {
-      RETRO_CONTEXT.core.as_ref().unwrap().serialize(data, size)
+    extern "C" fn retro_serialize(data: *mut (), size: libretro_rs::libc::size_t) -> bool {
+      core_ref(|core| core.serialize(data, size))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_unserialize(data: *const (), size: libretro_rs::libc::size_t) -> bool {
-      RETRO_CONTEXT.core.as_mut().unwrap().unserialize(data, size)
+    extern "C" fn retro_unserialize(data: *const (), size: libretro_rs::libc::size_t) -> bool {
+      core_mut(|core| core.unserialize(data, size))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_cheat_reset() {
-      RETRO_CONTEXT.core.as_mut().unwrap().cheat_reset()
+    extern "C" fn retro_cheat_reset() {
+      core_mut(|core| core.cheat_reset())
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_cheat_set(index: libretro_rs::libc::c_uint, enabled: bool, code: *const libretro_rs::libc::c_char) {
-      RETRO_CONTEXT.core.as_mut().unwrap().cheat_set(index, enabled, code)
+    extern "C" fn retro_cheat_set(index: libretro_rs::libc::c_uint, enabled: bool, code: *const libretro_rs::libc::c_char) {
+      core_mut(|core| core.cheat_set(index, enabled, code))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_load_game(game: &libretro_rs::sys::retro_game_info) {
-      RETRO_CONTEXT.core.as_mut().unwrap().load_game(game)
+    extern "C" fn retro_load_game(game: &libretro_rs::sys::retro_game_info) {
+      core_mut(|core| core.load_game(game))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_load_game_special(game_type: libretro_rs::libc::c_uint, info: &libretro_rs::sys::retro_game_info, num_info: libretro_rs::libc::size_t) {
-      RETRO_CONTEXT.core.as_mut().unwrap().load_game_special(game_type, info, num_info)
+    extern "C" fn retro_load_game_special(game_type: libretro_rs::libc::c_uint, info: &libretro_rs::sys::retro_game_info, num_info: libretro_rs::libc::size_t) {
+      core_mut(|core| core.load_game_special(game_type, info, num_info))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_unload_game() {
-      RETRO_CONTEXT.core.as_mut().unwrap().unload_game()
+    extern "C" fn retro_unload_game() {
+      core_mut(|core| core.unload_game())
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_get_region() -> libretro_rs::libc::c_uint {
-      RETRO_CONTEXT.core.as_mut().unwrap().get_region()
+    extern "C" fn retro_get_region() -> libretro_rs::libc::c_uint {
+      core_ref(|core| core.get_region())
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_get_memory_data(id: libretro_rs::libc::c_uint) -> *mut () {
-      RETRO_CONTEXT.core.as_mut().unwrap().get_memory_data(id)
+    extern "C" fn retro_get_memory_data(id: libretro_rs::libc::c_uint) -> *mut () {
+      core_mut(|core| core.get_memory_data(id))
     }
 
     #[no_mangle]
-    unsafe extern "C" fn retro_get_memory_size(id: libretro_rs::libc::c_uint) -> libretro_rs::libc::size_t {
-      RETRO_CONTEXT.core.as_mut().unwrap().get_memory_size(id)
+    extern "C" fn retro_get_memory_size(id: libretro_rs::libc::c_uint) -> libretro_rs::libc::size_t {
+      core_ref(|core| core.get_memory_size(id))
+    }
+
+    #[inline]
+    fn core_ref<T>(f: impl FnOnce(&$core) -> T) -> T {
+      context_ref(|ctx| f(ctx.core.as_ref().unwrap()))
+    }
+
+    #[inline]
+    fn core_mut<T>(f: impl FnOnce(&mut $core) -> T) -> T {
+      context_mut(|ctx| (f)(ctx.core.as_mut().unwrap()))
+    }
+
+    #[inline]
+    fn context_ref<T>(f: impl FnOnce(&RetroContext<$core>) -> T) -> T {
+      unsafe {
+        (f)(&RETRO_CONTEXT)
+      }
+    }
+
+    #[inline]
+    fn context_mut<T>(f: impl FnOnce(&mut RetroContext<$core>) -> T) -> T {
+      unsafe {
+        (f)(&mut RETRO_CONTEXT)
+      }
     }
   }
 }

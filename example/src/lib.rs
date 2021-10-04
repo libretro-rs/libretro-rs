@@ -1,6 +1,6 @@
 use libretro_rs::{libretro_core, RetroCore};
 
-pub struct Emulator {}
+pub struct Emulator;
 
 impl RetroCore for Emulator {
   fn new(env: &libretro_rs::RetroEnvironment) -> Self {
@@ -10,14 +10,14 @@ impl RetroCore for Emulator {
 
     println!("[libretro_rs] system_dir={}", &system_dir);
 
-    Emulator {}
+    Emulator
   }
 
-  fn get_system_info(info: &mut libretro_rs::sys::retro_system_info) {
+  fn get_system_info(_: &mut libretro_rs::sys::retro_system_info) {
     println!("[libretro_rs] get_system_info()");
   }
 
-  fn get_system_av_info(&self, info: &mut libretro_rs::sys::retro_system_av_info) {
+  fn get_system_av_info(&self, _: &mut libretro_rs::sys::retro_system_av_info) {
     println!("[libretro_rs] get_system_av_info()");
   }
 
@@ -33,7 +33,7 @@ impl RetroCore for Emulator {
     println!("[libretro_rs] run()");
   }
 
-  fn load_game(&mut self, game: &libretro_rs::sys::retro_game_info) {
+  fn load_game(&mut self, _: &libretro_rs::sys::retro_game_info) {
     println!("[libretro_rs] load_game()");
   }
 }

@@ -2,7 +2,7 @@
 
 ## Getting started
 
-A reference implementation is available in the `libretro-rs-impl` folder, and should be enough to get you started. At a high level, you need to modify your `Cargo.toml`:
+A reference implementation is available in the `example` folder, and should be enough to get you started. At a high level, you need to modify your `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -21,7 +21,6 @@ struct Emulator {
   // ...
 }
 
-// Note: RetroCore requires that your type also implements `Default`.
 impl RetroCore for Emulator {
   // ...
 }
