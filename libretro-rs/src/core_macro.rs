@@ -18,6 +18,7 @@ macro_rules! libretro_core {
         system: None,
         system_info: None,
         system_av_info: None,
+        system_region: None,
       };
 
       #[no_mangle]

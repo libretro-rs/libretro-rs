@@ -59,10 +59,6 @@ pub trait RetroCore {
 
   fn unload_game(&mut self, env: &RetroEnvironment) {}
 
-  fn get_region(&self, env: &RetroEnvironment) -> RetroRegion {
-    RetroRegion::NTSC
-  }
-
   fn get_memory_data(&mut self, env: &RetroEnvironment, id: u32) -> *mut () {
     std::ptr::null_mut()
   }
@@ -313,10 +309,11 @@ impl Into<u32> for RetroJoypadButton {
 #[must_use]
 pub enum RetroLoadGameResult {
   Failure,
-  Success { audio: RetroAudioInfo, video: RetroVideoInfo },
+  Success { region: RetroRegion, audio: RetroAudioInfo, video: RetroVideoInfo },
 }
 
 /// Represents the set of regions supported by `libretro`.
+#[derive(Clone, Copy)]
 pub enum RetroRegion {
   /// A 30 frames/second (60 fields/second) video system.
   NTSC = 0,
@@ -493,6 +490,7 @@ impl RetroVideoInfo {
 pub struct RetroInstance<T: RetroCore> {
   pub system: Option<T>,
   pub system_info: Option<RetroSystemInfo>,
+  pub system_region: Option<RetroRegion>,
   pub system_av_info: Option<RetroSystemAvInfo>,
   pub audio_sample: retro_audio_sample_t,
   pub audio_sample_batch: retro_audio_sample_batch_t,
@@ -660,7 +658,8 @@ impl<T: RetroCore> RetroInstance<T> {
         self.system_av_info = None;
         false
       }
-      RetroLoadGameResult::Success { audio, video } => {
+      RetroLoadGameResult::Success { region, audio, video } => {
+        self.system_region = Some(region);
         self.system_av_info = Some(RetroSystemAvInfo { audio, video });
         true
       }
@@ -681,8 +680,7 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
   pub fn on_get_region(&self) -> libc::c_uint {
-    let env = self.environment();
-    self.core_ref(|core| core.get_region(&env).into())
+    self.system_region.unwrap().into()
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.

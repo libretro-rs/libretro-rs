@@ -44,6 +44,7 @@ impl RetroCore for Emulator {
     }
 
     RetroLoadGameResult::Success {
+      region: RetroRegion::NTSC,
       audio: RetroAudioInfo::new(44_100.0),
       video: RetroVideoInfo::new(60.0, 256, 240),
     }
