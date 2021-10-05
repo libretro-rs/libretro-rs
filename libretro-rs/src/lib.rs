@@ -24,7 +24,7 @@ pub trait RetroCore {
   fn get_system_av_info(&self, info: &mut retro_system_av_info);
 
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
-  fn set_controller_port_device(&mut self, port: u32, device: RetroDevice);
+  fn set_controller_port_device(&mut self, port: u32, device: RetroDevice) {}
 
   /// Called when a player resets their game.
   fn reset(&mut self);
@@ -121,15 +121,23 @@ pub enum RetroJoypadButton {
   R3 = 15,
 }
 
+trait Assoc {
+  type Type;
+}
+
+impl<T> Assoc for Option<T> {
+  type Type = T;
+}
+
 /// Exposes the `retro_environment_t` callback in an idiomatic fashion. Each of the `RETRO_ENVIRONMENT_*` keys will
 /// eventually have a corresponding method here.
 ///
 /// Until that is accomplished, the keys are available in `libretro_rs::sys` and can be used manually with the `get_raw`,
 /// `get`, `get_str` and `set_raw` functions.
-pub struct RetroEnvironment(retro_environment_t);
+pub struct RetroEnvironment(<retro_environment_t as Assoc>::Type);
 
 impl RetroEnvironment {
-  pub fn new(cb: retro_environment_t) -> RetroEnvironment {
+  fn new(cb: <retro_environment_t as Assoc>::Type) -> RetroEnvironment {
     RetroEnvironment(cb)
   }
 
@@ -137,7 +145,7 @@ impl RetroEnvironment {
 
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   pub fn shutdown(&self) -> bool {
-    unsafe { (self.0.unwrap())(RETRO_ENVIRONMENT_SHUTDOWN, std::ptr::null_mut()) }
+    unsafe { (self.0)(RETRO_ENVIRONMENT_SHUTDOWN, std::ptr::null_mut()) }
   }
 
   /* Queries */
@@ -185,14 +193,22 @@ impl RetroEnvironment {
     }
   }
 
-  /// Simply invokes the underlying `retro_environment_t` in a "get" fashion.
+  /// Directly invokes the underlying `retro_environment_t` in a "get" fashion.
+  #[inline]
   pub unsafe fn get_raw<T>(&self, key: u32, output: *mut *const T) -> bool {
-    self.0.unwrap()(key, output as *mut c_void)
+    self.0(key, output as *mut c_void)
   }
 
-  /// Simply invokes the underlying `retro_environment_t` in a "set" fashion.
+  /// Directly invokes the underlying `retro_environment_t` in a "set" fashion.
+  #[inline]
   pub unsafe fn set_raw<T>(&self, key: u32, input: *const T) -> bool {
-    self.0.unwrap()(key, input as *mut c_void)
+    self.0(key, input as *mut c_void)
+  }
+
+  /// Directly invokes the underlying `retro_environment_t` in a "command" fashion.
+  #[inline]
+  pub unsafe fn cmd_raw<T>(&self, key: u32) -> bool {
+    self.0(key, std::ptr::null_mut())
   }
 }
 
@@ -287,7 +303,7 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_init` API call.
   pub fn on_init(&mut self) {
-    let env = RetroEnvironment::new(self.environment);
+    let env = RetroEnvironment::new(self.environment.unwrap());
     self.core = Some(T::new(&env))
   }
 
