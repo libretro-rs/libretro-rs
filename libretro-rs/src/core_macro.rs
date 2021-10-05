@@ -15,7 +15,9 @@ macro_rules! libretro_core {
         input_poll: None,
         input_state: None,
         video_refresh: None,
-        core: None,
+        system: None,
+        system_info: None,
+        system_av_info: None,
       };
 
       #[no_mangle]
@@ -25,7 +27,7 @@ macro_rules! libretro_core {
 
       #[no_mangle]
       extern "C" fn retro_get_system_info(info: &mut retro_system_info) {
-        instance_ref(|instance| instance.on_get_system_info(info))
+        instance_mut(|instance| instance.on_get_system_info(info))
       }
 
       #[no_mangle]

@@ -3,7 +3,7 @@ use libretro_rs::*;
 pub struct Emulator;
 
 impl RetroCore for Emulator {
-  fn new(env: &RetroEnvironment) -> Self {
+  fn init(env: &RetroEnvironment) -> Self {
     let system_dir = env.get_system_directory().unwrap_or("~/.config/emulator");
 
     println!("[libretro_rs] new(). system_dir={}", system_dir);
@@ -11,12 +11,10 @@ impl RetroCore for Emulator {
     Emulator
   }
 
-  fn get_system_info(_: &mut sys::retro_system_info) {
+  fn get_system_info() -> RetroSystemInfo {
     println!("[libretro_rs] get_system_info()");
-  }
 
-  fn get_system_av_info(&self, _: &RetroEnvironment, _: &mut sys::retro_system_av_info) {
-    println!("[libretro_rs] get_system_av_info()");
+    RetroSystemInfo::new("emulator", env!("CARGO_PKG_VERSION"))
   }
 
   fn set_controller_port_device(&mut self, _: &RetroEnvironment, port: u32, device: RetroDevice) {
@@ -31,20 +29,23 @@ impl RetroCore for Emulator {
     println!("[libretro_rs] run()");
   }
 
-  fn load_game(&mut self, _: &RetroEnvironment, game: RetroGame) -> bool {
+  fn load_game(&mut self, _: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult {
     match game {
       RetroGame::None { .. } => {
         println!("[libretro_rs] load_game()");
-        false
+        return RetroLoadGameResult::Failure;
       }
       RetroGame::Data { .. } => {
         println!("[libretro_rs] load_game(&[...])");
-        true
       }
       RetroGame::Path { path, .. } => {
         println!("[libretro_rs] load_game({})", path);
-        true
       }
+    }
+
+    RetroLoadGameResult::Success {
+      audio: RetroAudioInfo::new(44_100.0),
+      video: RetroVideoInfo::new(60.0, 256, 240),
     }
   }
 }

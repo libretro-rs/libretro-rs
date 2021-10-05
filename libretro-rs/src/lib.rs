@@ -3,23 +3,21 @@ pub use libc;
 pub mod core_macro;
 pub mod sys;
 
-use libc::c_void;
+use libc::{c_char, c_void};
 use std::ffi::CStr;
 use sys::*;
 
 #[allow(unused_variables)]
 pub trait RetroCore {
+  const SUPPORT_NO_GAME: bool = false;
+
   /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
   /// required for the core to function properly.
-  fn new(env: &RetroEnvironment) -> Self;
+  fn init(env: &RetroEnvironment) -> Self;
 
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
-  fn get_system_info(info: &mut retro_system_info);
-
-  /// Called to get audio/video parameters. This is guaranteed to be called _after_ `retro_load_game`, so that a core
-  /// can decide how to emulate the game.
-  fn get_system_av_info(&self, env: &RetroEnvironment, info: &mut retro_system_av_info);
+  fn get_system_info() -> RetroSystemInfo;
 
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
   fn set_controller_port_device(&mut self, env: &RetroEnvironment, port: u32, device: RetroDevice) {}
@@ -49,11 +47,11 @@ pub trait RetroCore {
     false
   }
 
-  fn cheat_reset(&mut self) {}
+  fn cheat_reset(&mut self, env: &RetroEnvironment) {}
 
   fn cheat_set(&mut self, env: &RetroEnvironment, index: u32, enabled: bool, code: *const libc::c_char) {}
 
-  fn load_game(&mut self, env: &RetroEnvironment, game: RetroGame) -> bool;
+  fn load_game(&mut self, env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult;
 
   fn load_game_special(&mut self, env: &RetroEnvironment, game_type: u32, info: RetroGame, num_info: usize) -> bool {
     false
@@ -71,6 +69,16 @@ pub trait RetroCore {
 
   fn get_memory_size(&self, env: &RetroEnvironment, id: u32) -> usize {
     0
+  }
+}
+
+pub struct RetroAudioInfo {
+  sample_rate: f64,
+}
+
+impl RetroAudioInfo {
+  pub fn new(sample_rate: f64) -> RetroAudioInfo {
+    RetroAudioInfo { sample_rate }
   }
 }
 
@@ -113,6 +121,7 @@ impl<T> Assoc for Option<T> {
 ///
 /// Until that is accomplished, the keys are available in `libretro_rs::sys` and can be used manually with the `get_raw`,
 /// `get`, `get_str` and `set_raw` functions.
+#[derive(Clone, Copy)]
 pub struct RetroEnvironment(<retro_environment_t as Assoc>::Type);
 
 impl RetroEnvironment {
@@ -124,7 +133,15 @@ impl RetroEnvironment {
 
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   pub fn shutdown(&self) -> bool {
-    unsafe { (self.0)(RETRO_ENVIRONMENT_SHUTDOWN, std::ptr::null_mut()) }
+    unsafe { self.cmd_raw(RETRO_ENVIRONMENT_SHUTDOWN) }
+  }
+
+  pub fn set_pixel_format(&self, val: RetroPixelFormat) -> bool {
+    self.set_u32(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, val.into())
+  }
+
+  pub fn set_support_no_game(&self, val: bool) -> bool {
+    self.set_bool(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, val)
   }
 
   /* Queries */
@@ -178,15 +195,25 @@ impl RetroEnvironment {
     self.0(key, output as *mut c_void)
   }
 
+  #[inline]
+  pub fn set_bool(&self, key: u32, val: bool) -> bool {
+    unsafe { self.set_raw(key, &val) }
+  }
+
+  #[inline]
+  pub fn set_u32(&self, key: u32, val: u32) -> bool {
+    unsafe { self.set_raw(key, &val) }
+  }
+
   /// Directly invokes the underlying `retro_environment_t` in a "set" fashion.
   #[inline]
-  pub unsafe fn set_raw<T>(&self, key: u32, input: *const T) -> bool {
-    self.0(key, input as *mut c_void)
+  pub unsafe fn set_raw<T>(&self, key: u32, val: *const T) -> bool {
+    self.0(key, val as *mut c_void)
   }
 
   /// Directly invokes the underlying `retro_environment_t` in a "command" fashion.
   #[inline]
-  pub unsafe fn cmd_raw<T>(&self, key: u32) -> bool {
+  pub unsafe fn cmd_raw(&self, key: u32) -> bool {
     self.0(key, std::ptr::null_mut())
   }
 }
@@ -223,17 +250,17 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
       return RetroGame::None { meta };
     }
 
-    if !game.path.is_null() {
-      unsafe {
-        let path = CStr::from_ptr(game.path).to_str().unwrap();
-        return RetroGame::Path { meta, path };
-      }
-    }
-
     if !game.data.is_null() {
       unsafe {
         let data = std::slice::from_raw_parts(game.data as *const u8, game.size);
         return RetroGame::Data { meta, data };
+      }
+    }
+
+    if !game.path.is_null() {
+      unsafe {
+        let path = CStr::from_ptr(game.path).to_str().unwrap();
+        return RetroGame::Path { meta, path };
       }
     }
 
@@ -252,8 +279,8 @@ pub enum RetroJoypadButton {
   Right = 7,
   A = 8,
   X = 9,
-  L = 10,
-  R = 11,
+  L1 = 10,
+  R1 = 11,
   L2 = 12,
   R2 = 13,
   L3 = 14,
@@ -273,14 +300,20 @@ impl Into<u32> for RetroJoypadButton {
       Self::Right => 7,
       Self::A => 8,
       Self::X => 9,
-      Self::L => 10,
-      Self::R => 11,
+      Self::L1 => 10,
+      Self::R1 => 11,
       Self::L2 => 12,
       Self::R2 => 13,
       Self::L3 => 14,
       Self::R3 => 15,
     }
   }
+}
+
+#[must_use]
+pub enum RetroLoadGameResult {
+  Failure,
+  Success { audio: RetroAudioInfo, video: RetroVideoInfo },
 }
 
 /// Represents the set of regions supported by `libretro`.
@@ -296,6 +329,23 @@ impl Into<u32> for RetroRegion {
     match self {
       Self::NTSC => 0,
       Self::PAL => 1,
+    }
+  }
+}
+
+#[derive(Clone, Copy)]
+pub enum RetroPixelFormat {
+  RGB1555,
+  XRGB8888,
+  RGB565,
+}
+
+impl Into<u32> for RetroPixelFormat {
+  fn into(self) -> u32 {
+    match self {
+      RetroPixelFormat::RGB1555 => 0,
+      RetroPixelFormat::XRGB8888 => 1,
+      RetroPixelFormat::RGB565 => 2,
     }
   }
 }
@@ -325,7 +375,7 @@ impl RetroRuntime {
   /// Sends audio data to the `libretro` frontend.
   pub fn upload_audio_frame(&self, frame: &[i16]) -> usize {
     unsafe {
-      return (self.audio_sample_batch)(frame.as_ptr(), frame.len());
+      return (self.audio_sample_batch)(frame.as_ptr(), frame.len() / 2);
     }
   }
 
@@ -352,12 +402,101 @@ impl RetroRuntime {
   }
 }
 
+pub struct RetroSystemInfo {
+  name: String,
+  version: String,
+  valid_extensions: Option<String>,
+  block_extract: bool,
+  need_full_path: bool,
+}
+
+impl RetroSystemInfo {
+  pub fn new<N: Into<String>, V: Into<String>>(name: N, version: V) -> RetroSystemInfo {
+    RetroSystemInfo {
+      name: name.into(),
+      version: version.into(),
+      valid_extensions: None,
+      block_extract: false,
+      need_full_path: false,
+    }
+  }
+
+  pub fn with_valid_extensions(mut self, extensions: &[&str]) -> Self {
+    self.valid_extensions = if extensions.len() == 0 {
+      None
+    } else {
+      Some(extensions.join("|"))
+    };
+
+    self
+  }
+
+  pub fn with_block_extract(mut self) -> Self {
+    self.block_extract = true;
+    self
+  }
+
+  pub fn with_need_full_path(mut self) -> Self {
+    self.need_full_path = true;
+    self
+  }
+}
+
+pub struct RetroSystemAvInfo {
+  audio: RetroAudioInfo,
+  video: RetroVideoInfo,
+}
+
+pub struct RetroVideoInfo {
+  frame_rate: f64,
+  width: u32,
+  height: u32,
+  aspect_ratio: f32,
+  max_width: u32,
+  max_height: u32,
+  pixel_format: RetroPixelFormat,
+}
+
+impl RetroVideoInfo {
+  pub fn new(frame_rate: f64, width: u32, height: u32) -> RetroVideoInfo {
+    assert_ne!(height, 0);
+
+    RetroVideoInfo {
+      frame_rate,
+      width,
+      height,
+      aspect_ratio: (width as f32) / (height as f32),
+      max_width: width,
+      max_height: height,
+      pixel_format: RetroPixelFormat::RGB1555,
+    }
+  }
+
+  pub fn with_aspect_ratio(mut self, aspect_ratio: f32) -> Self {
+    self.aspect_ratio = aspect_ratio;
+    self
+  }
+
+  pub fn with_max(mut self, width: u32, height: u32) -> Self {
+    self.max_width = width;
+    self.max_height = height;
+    self
+  }
+
+  pub fn with_pixel_format(mut self, pixel_format: RetroPixelFormat) -> Self {
+    self.pixel_format = pixel_format;
+    self
+  }
+}
+
 /// This is the glue layer between a `RetroCore` implementation, and the `libretro` API.
 pub struct RetroInstance<T: RetroCore> {
-  pub core: Option<T>,
+  pub system: Option<T>,
+  pub system_info: Option<RetroSystemInfo>,
+  pub system_av_info: Option<RetroSystemAvInfo>,
   pub audio_sample: retro_audio_sample_t,
   pub audio_sample_batch: retro_audio_sample_batch_t,
-  pub environment: retro_environment_t,
+  pub environment: Option<RetroEnvironment>,
   pub input_poll: retro_input_poll_t,
   pub input_state: retro_input_state_t,
   pub video_refresh: retro_video_refresh_t,
@@ -365,27 +504,52 @@ pub struct RetroInstance<T: RetroCore> {
 
 impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_get_system_info` API call.
-  pub fn on_get_system_info(&self, info: &mut retro_system_info) {
-    T::get_system_info(info)
+  pub fn on_get_system_info(&mut self, info: &mut retro_system_info) {
+    let system_info = T::get_system_info();
+
+    info.library_name = system_info.name.as_ptr() as *const c_char;
+    info.library_version = system_info.version.as_ptr() as *const c_char;
+    info.block_extract = system_info.block_extract;
+    info.need_fullpath = system_info.need_full_path;
+    info.valid_extensions = match system_info.valid_extensions.as_ref() {
+      None => std::ptr::null(),
+      Some(ext) => ext.as_ptr() as *const c_char,
+    };
+
+    // Hold on to the struct so the pointers don't dangle.
+    self.system_info = Some(system_info)
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_system_av_info` API call.
   pub fn on_get_system_av_info(&self, info: &mut retro_system_av_info) {
-    self.core_ref(|core| {
-      let env = RetroEnvironment::new(self.environment.unwrap());
-      core.get_system_av_info(&env, info)
-    })
+    let av_info = self
+      .system_av_info
+      .as_ref()
+      .expect("`retro_get_system_av_info` called without a successful `retro_load_game` call. The frontend is not compliant.");
+
+    let audio = &av_info.audio;
+    let video = &av_info.video;
+
+    self.environment().set_pixel_format(video.pixel_format);
+
+    info.geometry.aspect_ratio = video.aspect_ratio;
+    info.geometry.base_width = video.width;
+    info.geometry.base_height = video.height;
+    info.geometry.max_width = video.max_width;
+    info.geometry.max_height = video.max_height;
+    info.timing.fps = video.frame_rate;
+    info.timing.sample_rate = audio.sample_rate;
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_init` API call.
   pub fn on_init(&mut self) {
-    let env = RetroEnvironment::new(self.environment.unwrap());
-    self.core = Some(T::new(&env))
+    let env = self.environment();
+    self.system = Some(T::init(&env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_deinit` API call.
   pub fn on_deinit(&mut self) {
-    self.core = None;
+    self.system = None;
     self.audio_sample = None;
     self.audio_sample_batch = None;
     self.environment = None;
@@ -396,7 +560,8 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_set_environment` API call.
   pub fn on_set_environment(&mut self, cb: retro_environment_t) {
-    self.environment = cb;
+    self.environment = cb.map(RetroEnvironment::new);
+    self.environment().set_support_no_game(T::SUPPORT_NO_GAME);
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_set_audio_sample` API call.
@@ -426,13 +591,13 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
   pub fn on_set_controller_port_device(&mut self, port: libc::c_uint, device: libc::c_uint) {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.set_controller_port_device(&env, port, device.into()))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_reset` API call.
   pub fn on_reset(&mut self) {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.reset(&env))
   }
 
@@ -443,7 +608,7 @@ impl<T: RetroCore> RetroInstance<T> {
       (self.input_poll.unwrap())();
     }
 
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
 
     let runtime = RetroRuntime::new(
       self.audio_sample,
@@ -458,69 +623,84 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_serialize_size` API call.
   pub fn on_serialize_size(&self) -> libc::size_t {
-    self.core_ref(|core| {
-      let env = RetroEnvironment::new(self.environment.unwrap());
-      core.serialize_size(&env)
-    })
+    let env = self.environment();
+    self.core_ref(|core| core.serialize_size(&env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_serialize` API call.
   pub fn on_serialize(&self, data: *mut (), size: libc::size_t) -> bool {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_ref(|core| core.serialize(&env, data, size))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_unserialize` API call.
   pub fn on_unserialize(&mut self, data: *const (), size: libc::size_t) -> bool {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.unserialize(&env, data, size))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_cheat_reset` API call.
   pub fn on_cheat_reset(&mut self) {
-    self.core_mut(|core| core.cheat_reset())
+    let env = self.environment();
+    self.core_mut(|core| core.cheat_reset(&env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_cheat_set` API call.
   pub fn on_cheat_set(&mut self, index: libc::c_uint, enabled: bool, code: *const libc::c_char) {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.cheat_set(&env, index, enabled, code))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
   pub fn on_load_game(&mut self, game: &retro_game_info) -> bool {
-    let env = RetroEnvironment::new(self.environment.unwrap());
-    self.core_mut(|core| core.load_game(&env, game.into()))
+    let env = self.environment();
+
+    match self.core_mut(|core| core.load_game(&env, game.into())) {
+      RetroLoadGameResult::Failure => {
+        self.system_av_info = None;
+        false
+      }
+      RetroLoadGameResult::Success { audio, video } => {
+        self.system_av_info = Some(RetroSystemAvInfo { audio, video });
+        true
+      }
+    }
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
   pub fn on_load_game_special(&mut self, game_type: libc::c_uint, info: &retro_game_info, num_info: libc::size_t) -> bool {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.load_game_special(&env, game_type, info.into(), num_info))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_unload_game` API call.
   pub fn on_unload_game(&mut self) {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.unload_game(&env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
   pub fn on_get_region(&self) -> libc::c_uint {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_ref(|core| core.get_region(&env).into())
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.
   pub fn on_get_memory_data(&mut self, id: libc::c_uint) -> *mut () {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.get_memory_data(&env, id))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
   pub fn on_get_memory_size(&mut self, id: libc::c_uint) -> libc::size_t {
-    let env = RetroEnvironment::new(self.environment.unwrap());
+    let env = self.environment();
     self.core_mut(|core| core.get_memory_size(&env, id))
+  }
+
+  #[inline]
+  #[doc(hidden)]
+  fn environment(&self) -> RetroEnvironment {
+    self.environment.unwrap()
   }
 
   #[inline]
@@ -529,7 +709,7 @@ impl<T: RetroCore> RetroInstance<T> {
   where
     F: FnOnce(&mut T) -> Output,
   {
-    f(self.core.as_mut().unwrap())
+    f(self.system.as_mut().unwrap())
   }
 
   #[inline]
@@ -538,6 +718,6 @@ impl<T: RetroCore> RetroInstance<T> {
   where
     F: FnOnce(&T) -> Output,
   {
-    f(self.core.as_ref().unwrap())
+    f(self.system.as_ref().unwrap())
   }
 }
