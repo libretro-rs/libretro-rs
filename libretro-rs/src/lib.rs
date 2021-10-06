@@ -3,8 +3,8 @@ pub use libc;
 pub mod core_macro;
 pub mod sys;
 
-use libc::{c_char, c_void};
-use std::ffi::CStr;
+use libc::c_void;
+use std::ffi::{CStr, CString};
 use sys::*;
 
 #[allow(unused_variables)]
@@ -130,6 +130,11 @@ impl RetroEnvironment {
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   pub fn shutdown(&self) -> bool {
     unsafe { self.cmd_raw(RETRO_ENVIRONMENT_SHUTDOWN) }
+  }
+
+  pub fn set_geometry(&self, val: RetroGameGeometry) -> bool {
+    let val: retro_game_geometry = val.into();
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &val) }
   }
 
   pub fn set_pixel_format(&self, val: RetroPixelFormat) -> bool {
@@ -264,6 +269,34 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
   }
 }
 
+pub struct RetroGameGeometry {
+  width: u32,
+  height: u32,
+  aspect_ratio: f32,
+}
+
+impl RetroGameGeometry {
+  pub fn new(width: u32, height: u32, aspect_ratio: f32) -> RetroGameGeometry {
+    RetroGameGeometry {
+      width,
+      height,
+      aspect_ratio,
+    }
+  }
+}
+
+impl Into<retro_game_geometry> for RetroGameGeometry {
+  fn into(self) -> retro_game_geometry {
+    retro_game_geometry {
+      base_width: self.width,
+      base_height: self.height,
+      max_width: 0,
+      max_height: 0,
+      aspect_ratio: self.aspect_ratio,
+    }
+  }
+}
+
 pub enum RetroJoypadButton {
   B = 0,
   Y = 1,
@@ -309,7 +342,11 @@ impl Into<u32> for RetroJoypadButton {
 #[must_use]
 pub enum RetroLoadGameResult {
   Failure,
-  Success { region: RetroRegion, audio: RetroAudioInfo, video: RetroVideoInfo },
+  Success {
+    region: RetroRegion,
+    audio: RetroAudioInfo,
+    video: RetroVideoInfo,
+  },
 }
 
 /// Represents the set of regions supported by `libretro`.
@@ -400,18 +437,18 @@ impl RetroRuntime {
 }
 
 pub struct RetroSystemInfo {
-  name: String,
-  version: String,
-  valid_extensions: Option<String>,
+  name: CString,
+  version: CString,
+  valid_extensions: Option<CString>,
   block_extract: bool,
   need_full_path: bool,
 }
 
 impl RetroSystemInfo {
-  pub fn new<N: Into<String>, V: Into<String>>(name: N, version: V) -> RetroSystemInfo {
+  pub fn new(name: &str, version: &str) -> RetroSystemInfo {
     RetroSystemInfo {
-      name: name.into(),
-      version: version.into(),
+      name: CString::new(name).unwrap(),
+      version: CString::new(version).unwrap(),
       valid_extensions: None,
       block_extract: false,
       need_full_path: false,
@@ -422,7 +459,7 @@ impl RetroSystemInfo {
     self.valid_extensions = if extensions.len() == 0 {
       None
     } else {
-      Some(extensions.join("|"))
+      CString::new(extensions.join("|")).ok()
     };
 
     self
@@ -503,19 +540,19 @@ pub struct RetroInstance<T: RetroCore> {
 impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_get_system_info` API call.
   pub fn on_get_system_info(&mut self, info: &mut retro_system_info) {
-    let system_info = T::get_system_info();
-
-    info.library_name = system_info.name.as_ptr() as *const c_char;
-    info.library_version = system_info.version.as_ptr() as *const c_char;
-    info.block_extract = system_info.block_extract;
-    info.need_fullpath = system_info.need_full_path;
-    info.valid_extensions = match system_info.valid_extensions.as_ref() {
-      None => std::ptr::null(),
-      Some(ext) => ext.as_ptr() as *const c_char,
-    };
-
     // Hold on to the struct so the pointers don't dangle.
-    self.system_info = Some(system_info)
+    self.system_info = Some(T::get_system_info());
+
+    let si = self.system_info.as_ref().unwrap();
+
+    info.library_name = si.name.as_ptr();
+    info.library_version = si.version.as_ptr();
+    info.block_extract = si.block_extract;
+    info.need_fullpath = si.need_full_path;
+    info.valid_extensions = match si.valid_extensions.as_ref() {
+      None => std::ptr::null(),
+      Some(ext) => ext.as_ptr(),
+    };
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_system_av_info` API call.
