@@ -1,9 +1,7 @@
-pub use libc;
+pub use libretro_rs_sys as sys;
 
 pub mod core_macro;
-pub mod sys;
 
-use libc::c_void;
 use std::ffi::{CStr, CString};
 use sys::*;
 
@@ -104,24 +102,16 @@ impl From<u32> for RetroDevice {
   }
 }
 
-trait Assoc {
-  type Type;
-}
-
-impl<T> Assoc for Option<T> {
-  type Type = T;
-}
-
 /// Exposes the `retro_environment_t` callback in an idiomatic fashion. Each of the `RETRO_ENVIRONMENT_*` keys will
 /// eventually have a corresponding method here.
 ///
 /// Until that is accomplished, the keys are available in `libretro_rs::sys` and can be used manually with the `get_raw`,
 /// `get`, `get_str` and `set_raw` functions.
 #[derive(Clone, Copy)]
-pub struct RetroEnvironment(<retro_environment_t as Assoc>::Type);
+pub struct RetroEnvironment(retro_environment_t);
 
 impl RetroEnvironment {
-  fn new(cb: <retro_environment_t as Assoc>::Type) -> RetroEnvironment {
+  fn new(cb: retro_environment_t) -> RetroEnvironment {
     RetroEnvironment(cb)
   }
 
@@ -193,7 +183,7 @@ impl RetroEnvironment {
   /// Directly invokes the underlying `retro_environment_t` in a "get" fashion.
   #[inline]
   pub unsafe fn get_raw<T>(&self, key: u32, output: *mut *const T) -> bool {
-    self.0(key, output as *mut c_void)
+    self.0.unwrap()(key, output as *mut libc::c_void)
   }
 
   #[inline]
@@ -209,13 +199,13 @@ impl RetroEnvironment {
   /// Directly invokes the underlying `retro_environment_t` in a "set" fashion.
   #[inline]
   pub unsafe fn set_raw<T>(&self, key: u32, val: *const T) -> bool {
-    self.0(key, val as *mut c_void)
+    self.0.unwrap()(key, val as *mut libc::c_void)
   }
 
   /// Directly invokes the underlying `retro_environment_t` in a "command" fashion.
   #[inline]
   pub unsafe fn cmd_raw(&self, key: u32) -> bool {
-    self.0(key, std::ptr::null_mut())
+    self.0.unwrap()(key, std::ptr::null_mut())
   }
 }
 
@@ -253,7 +243,7 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
 
     if !game.data.is_null() {
       unsafe {
-        let data = std::slice::from_raw_parts(game.data as *const u8, game.size);
+        let data = std::slice::from_raw_parts(game.data as *const u8, game.size as usize);
         return RetroGame::Data { meta, data };
       }
     }
@@ -385,10 +375,10 @@ impl Into<u32> for RetroPixelFormat {
 }
 
 pub struct RetroRuntime {
-  audio_sample: <retro_audio_sample_t as Assoc>::Type,
-  audio_sample_batch: <retro_audio_sample_batch_t as Assoc>::Type,
-  input_state: <retro_input_state_t as Assoc>::Type,
-  video_refresh: <retro_video_refresh_t as Assoc>::Type,
+  audio_sample: retro_audio_sample_t,
+  audio_sample_batch: retro_audio_sample_batch_t,
+  input_state: retro_input_state_t,
+  video_refresh: retro_video_refresh_t,
 }
 
 impl RetroRuntime {
@@ -399,31 +389,34 @@ impl RetroRuntime {
     video_refresh: retro_video_refresh_t,
   ) -> Option<RetroRuntime> {
     Some(RetroRuntime {
-      audio_sample: audio_sample?,
-      audio_sample_batch: audio_sample_batch?,
-      input_state: input_state?,
-      video_refresh: video_refresh?,
+      audio_sample,
+      audio_sample_batch,
+      input_state,
+      video_refresh,
     })
   }
 
   /// Sends audio data to the `libretro` frontend.
   pub fn upload_audio_frame(&self, frame: &[i16]) -> usize {
     unsafe {
-      return (self.audio_sample_batch)(frame.as_ptr(), frame.len() / 2);
+      let cb = self.audio_sample_batch.unwrap();
+      return cb(frame.as_ptr(), (frame.len() as u64) / 2) as usize;
     }
   }
 
   /// Sends audio data to the `libretro` frontend.
   pub fn upload_audio_sample(&self, left: i16, right: i16) {
     unsafe {
-      return (self.audio_sample)(left, right);
+      let cb = self.audio_sample.unwrap();
+      return cb(left, right);
     }
   }
 
   /// Sends video data to the `libretro` frontend.
   pub fn upload_video_frame(&self, frame: &[u8], width: u32, height: u32, pitch: usize) {
     unsafe {
-      return (self.video_refresh)(frame.as_ptr() as *const c_void, width, height, pitch);
+      let cb = self.video_refresh.unwrap();
+      return cb(frame.as_ptr() as *const libc::c_void, width, height, pitch as u64);
     }
   }
 
@@ -431,7 +424,8 @@ impl RetroRuntime {
   pub fn is_joypad_button_pressed(&self, port: u32, btn: RetroJoypadButton) -> bool {
     unsafe {
       // port, device, index, id
-      return (self.input_state)(port, RETRO_DEVICE_JOYPAD, 0, btn.into()) != 0;
+      let cb = self.input_state.unwrap();
+      return cb(port, RETRO_DEVICE_JOYPAD, 0, btn.into()) != 0;
     }
   }
 }
@@ -595,7 +589,7 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_set_environment` API call.
   pub fn on_set_environment(&mut self, cb: retro_environment_t) {
-    self.environment = cb.map(RetroEnvironment::new);
+    self.environment = Some(RetroEnvironment::new(cb));
     self.environment().set_support_no_game(T::SUPPORT_NO_GAME);
   }
 
