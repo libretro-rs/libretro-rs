@@ -9,10 +9,6 @@ use sys::*;
 pub trait RetroCore {
   const SUPPORT_NO_GAME: bool = false;
 
-  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
-  /// required for the core to function properly.
-  fn init(env: &RetroEnvironment) -> Self;
-
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
   fn get_system_info() -> RetroSystemInfo;
@@ -49,7 +45,9 @@ pub trait RetroCore {
 
   fn cheat_set(&mut self, env: &RetroEnvironment, index: u32, enabled: bool, code: &str) {}
 
-  fn load_game(&mut self, env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult;
+  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
+  /// required for the core to function properly.
+  fn load_game(env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> where Self: Sized;
 
   fn load_game_special(&mut self, env: &RetroEnvironment, game_type: u32, info: RetroGame, num_info: usize) -> bool {
     false
@@ -336,12 +334,13 @@ impl Into<u32> for RetroJoypadButton {
 }
 
 #[must_use]
-pub enum RetroLoadGameResult {
+pub enum RetroLoadGameResult<T> {
   Failure,
   Success {
     region: RetroRegion,
     audio: RetroAudioInfo,
     video: RetroVideoInfo,
+    core: T,
   },
 }
 
@@ -585,23 +584,6 @@ impl<T: RetroCore> RetroInstance<T> {
     info.timing.sample_rate = audio.sample_rate;
   }
 
-  /// Invoked by a `libretro` frontend, with the `retro_init` API call.
-  pub fn on_init(&mut self) {
-    let env = self.environment();
-    self.system = Some(T::init(&env))
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_deinit` API call.
-  pub fn on_deinit(&mut self) {
-    self.system = None;
-    self.audio_sample = None;
-    self.audio_sample_batch = None;
-    self.environment = None;
-    self.input_poll = None;
-    self.input_state = None;
-    self.video_refresh = None;
-  }
-
   /// Invoked by a `libretro` frontend, with the `retro_set_environment` API call.
   pub fn on_set_environment(&mut self, cb: retro_environment_t) {
     let mut env = RetroEnvironment::new(cb);
@@ -718,12 +700,13 @@ impl<T: RetroCore> RetroInstance<T> {
   pub fn on_load_game(&mut self, game: &retro_game_info) -> bool {
     let env = self.environment();
 
-    match self.core_mut(|core| core.load_game(&env, game.into())) {
+    match T::load_game(&env, game.into()) {
       RetroLoadGameResult::Failure => {
         self.system_av_info = None;
         false
       }
-      RetroLoadGameResult::Success { region, audio, video } => {
+      RetroLoadGameResult::Success { region, audio, video, core } => {
+        self.system = Some(core);
         self.system_region = Some(region);
         self.system_av_info = Some(RetroSystemAvInfo { audio, video });
         true
@@ -740,7 +723,14 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_unload_game` API call.
   pub fn on_unload_game(&mut self) {
     let env = self.environment();
-    self.core_mut(|core| core.unload_game(&env))
+    self.core_mut(|core| core.unload_game(&env));
+    self.system = None;
+    self.audio_sample = None;
+    self.audio_sample_batch = None;
+    self.environment = None;
+    self.input_poll = None;
+    self.input_state = None;
+    self.video_refresh = None;
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
