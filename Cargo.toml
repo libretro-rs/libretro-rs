@@ -1,0 +1,12 @@
+[workspace]
+members = [
+  "example",
+  "libretro-rs",
+  "libretro-rs-sys"
+]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
