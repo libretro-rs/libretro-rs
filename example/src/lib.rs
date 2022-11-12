@@ -17,8 +17,8 @@ impl RetroCore for Emulator {
     RetroSystemInfo::new("emulator", env!("CARGO_PKG_VERSION"))
   }
 
-  fn set_controller_port_device(&mut self, _: &RetroEnvironment, port: u32, device: RetroDevice) {
-    println!("[libretro_rs] set_controller_port_device({}, {:?})", port, device);
+  fn set_controller_port_device(&mut self, _: &RetroEnvironment, port: RetroDevicePort, device: RetroDevice) {
+    println!("[libretro_rs] set_controller_port_device({:?}, {:?})", port, device);
   }
 
   fn reset(&mut self, _: &RetroEnvironment) {
