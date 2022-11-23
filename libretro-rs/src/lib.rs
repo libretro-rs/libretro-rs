@@ -11,59 +11,59 @@ pub trait RetroCore: Sized {
 
   /// Called during `retro_init()`. This function is provided for the sake of completeness; it's generally redundant
   /// with [load_game].
-  fn init(env: &RetroEnvironment) {}
+  fn init(env: &mut RetroEnvironment) {}
 
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
   fn get_system_info() -> RetroSystemInfo;
 
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
-  fn set_controller_port_device(&mut self, env: &RetroEnvironment, port: RetroDevicePort, device: RetroDevice) {}
+  fn set_controller_port_device(&mut self, env: &mut RetroEnvironment, port: RetroDevicePort, device: RetroDevice) {}
 
   /// Called when a player resets their game.
-  fn reset(&mut self, env: &RetroEnvironment);
+  fn reset(&mut self, env: &mut RetroEnvironment);
 
   /// Called continuously once the core is initialized and a game is loaded. The core is expected to advance emulation
   /// by a single frame before returning.
-  fn run(&mut self, env: &RetroEnvironment, runtime: &RetroRuntime);
+  fn run(&mut self, env: &mut RetroEnvironment, runtime: &RetroRuntime);
 
   /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
   /// not exceed the size returned here for subsequent saves.
-  fn serialize_size(&self, env: &RetroEnvironment) -> usize {
+  fn serialize_size(&self, env: &mut RetroEnvironment) -> usize {
     0
   }
 
   /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn serialize(&self, env: &RetroEnvironment, data: &mut [u8], size: usize) -> bool {
+  fn serialize(&self, env: &mut RetroEnvironment, data: &mut [u8], size: usize) -> bool {
     false
   }
 
   /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn unserialize(&mut self, env: &RetroEnvironment, data: &[u8], size: usize) -> bool {
+  fn unserialize(&mut self, env: &mut RetroEnvironment, data: &[u8], size: usize) -> bool {
     false
   }
 
-  fn cheat_reset(&mut self, env: &RetroEnvironment) {}
+  fn cheat_reset(&mut self, env: &mut RetroEnvironment) {}
 
-  fn cheat_set(&mut self, env: &RetroEnvironment, index: u32, enabled: bool, code: &str) {}
+  fn cheat_set(&mut self, env: &mut RetroEnvironment, index: u32, enabled: bool, code: &str) {}
 
   /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
   /// required for the core to function properly.
-  fn load_game(env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self>;
+  fn load_game(env: &mut RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self>;
 
-  fn load_game_special(&mut self, env: &RetroEnvironment, game_type: u32, info: RetroGame, num_info: usize) -> bool {
+  fn load_game_special(&mut self, env: &mut RetroEnvironment, game_type: u32, info: RetroGame, num_info: usize) -> bool {
     false
   }
 
-  fn unload_game(&mut self, env: &RetroEnvironment) {}
+  fn unload_game(&mut self, env: &mut RetroEnvironment) {}
 
-  fn get_memory_data<'a>(&'a mut self, env: &RetroEnvironment, id: u32) -> Option<&'a mut [u8]> {
+  fn get_memory_data<'a>(&'a mut self, env: &mut RetroEnvironment, id: u32) -> Option<&'a mut [u8]> {
     None
   }
 
-  fn get_memory_size(&self, env: &RetroEnvironment, id: u32) -> usize {
+  fn get_memory_size(&self, env: &mut RetroEnvironment, id: u32) -> usize {
     0
   }
 }
@@ -590,8 +590,8 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_init` API call.
   pub fn on_init(&self) {
-    let env = self.environment();
-    T::init(&env);
+    let mut env = self.environment();
+    T::init(&mut env);
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_deinit` API call.
@@ -641,16 +641,16 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
   pub fn on_set_controller_port_device(&mut self, port: libc::c_uint, device: libc::c_uint) {
     if let Ok(device) = device.try_into() {
-      let env = self.environment();
+      let mut env = self.environment();
       let port = RetroDevicePort(port);
-      self.core_mut(|core| core.set_controller_port_device(&env, port, device))
+      self.core_mut(|core| core.set_controller_port_device(&mut env, port, device))
     }
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_reset` API call.
   pub fn on_reset(&mut self) {
-    let env = self.environment();
-    self.core_mut(|core| core.reset(&env))
+    let mut env = self.environment();
+    self.core_mut(|core| core.reset(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_run` API call.
@@ -658,7 +658,7 @@ impl<T: RetroCore> RetroInstance<T> {
     // `input_poll` is required to be called once per `retro_run`.
     self.input_poll();
 
-    let env = self.environment();
+    let mut env = self.environment();
 
     let runtime = RetroRuntime::new(
       self.audio_sample,
@@ -667,7 +667,7 @@ impl<T: RetroCore> RetroInstance<T> {
       self.video_refresh,
     );
 
-    self.core_mut(|core| core.run(&env, &runtime));
+    self.core_mut(|core| core.run(&mut env, &runtime));
   }
 
   fn input_poll(&mut self) {
@@ -680,16 +680,16 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_serialize_size` API call.
   pub fn on_serialize_size(&self) -> libc::size_t {
-    let env = self.environment();
-    self.core_ref(|core| core.serialize_size(&env))
+    let mut env = self.environment();
+    self.core_ref(|core| core.serialize_size(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_serialize` API call.
   pub fn on_serialize(&self, data: *mut (), size: libc::size_t) -> bool {
     unsafe {
       let data = std::slice::from_raw_parts_mut(data as *mut u8, size);
-      let env = self.environment();
-      self.core_ref(|core| core.serialize(&env, data, size))
+      let mut env = self.environment();
+      self.core_ref(|core| core.serialize(&mut env, data, size))
     }
   }
 
@@ -697,31 +697,31 @@ impl<T: RetroCore> RetroInstance<T> {
   pub fn on_unserialize(&mut self, data: *const (), size: libc::size_t) -> bool {
     unsafe {
       let data = std::slice::from_raw_parts(data as *const u8, size);
-      let env = self.environment();
-      self.core_mut(|core| core.unserialize(&env, data, size))
+      let mut env = self.environment();
+      self.core_mut(|core| core.unserialize(&mut env, data, size))
     }
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_cheat_reset` API call.
   pub fn on_cheat_reset(&mut self) {
-    let env = self.environment();
-    self.core_mut(|core| core.cheat_reset(&env))
+    let mut env = self.environment();
+    self.core_mut(|core| core.cheat_reset(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_cheat_set` API call.
   pub fn on_cheat_set(&mut self, index: libc::c_uint, enabled: bool, code: *const libc::c_char) {
     unsafe {
       let code = CStr::from_ptr(code).to_str().expect("`code` contains invalid data");
-      let env = self.environment();
-      self.core_mut(|core| core.cheat_set(&env, index, enabled, code))
+      let mut env = self.environment();
+      self.core_mut(|core| core.cheat_set(&mut env, index, enabled, code))
     }
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
   pub fn on_load_game(&mut self, game: &retro_game_info) -> bool {
-    let env = self.environment();
+    let mut env = self.environment();
 
-    match T::load_game(&env, game.into()) {
+    match T::load_game(&mut env, game.into()) {
       RetroLoadGameResult::Failure => {
         self.system_av_info = None;
         false
@@ -737,14 +737,14 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
   pub fn on_load_game_special(&mut self, game_type: libc::c_uint, info: &retro_game_info, num_info: libc::size_t) -> bool {
-    let env = self.environment();
-    self.core_mut(|core| core.load_game_special(&env, game_type, info.into(), num_info))
+    let mut env = self.environment();
+    self.core_mut(|core| core.load_game_special(&mut env, game_type, info.into(), num_info))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_unload_game` API call.
   pub fn on_unload_game(&mut self) {
-    let env = self.environment();
-    self.core_mut(|core| core.unload_game(&env))
+    let mut env = self.environment();
+    self.core_mut(|core| core.unload_game(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
@@ -755,9 +755,9 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.
   pub fn on_get_memory_data(&mut self, id: libc::c_uint) -> *mut () {
-    let env = self.environment();
+    let mut env = self.environment();
     self.core_mut(|core| {
-      if let Some(data) = core.get_memory_data(&env, id) {
+      if let Some(data) = core.get_memory_data(&mut env, id) {
         // TODO: is there a way to maintain lifetimes here?
         data.as_mut_ptr() as *mut ()
       } else {
@@ -768,8 +768,8 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
   pub fn on_get_memory_size(&mut self, id: libc::c_uint) -> libc::size_t {
-    let env = self.environment();
-    self.core_mut(|core| core.get_memory_size(&env, id))
+    let mut env = self.environment();
+    self.core_mut(|core| core.get_memory_size(&mut env, id))
   }
 
   #[inline]
