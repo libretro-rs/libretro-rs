@@ -3,14 +3,6 @@ use libretro_rs::*;
 pub struct Emulator;
 
 impl RetroCore for Emulator {
-  fn init(env: &RetroEnvironment) -> Self {
-    let system_dir = env.get_system_directory().unwrap_or("~/.config/emulator");
-
-    println!("[libretro_rs] new(). system_dir={}", system_dir);
-
-    Emulator
-  }
-
   fn get_system_info() -> RetroSystemInfo {
     println!("[libretro_rs] get_system_info()");
 
@@ -29,7 +21,10 @@ impl RetroCore for Emulator {
     println!("[libretro_rs] run()");
   }
 
-  fn load_game(&mut self, _: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult {
+  fn load_game(env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
+    let system_dir = env.get_system_directory().unwrap_or("~/.config/emulator");
+    println!("[libretro_rs] load_game(). system_dir={}", system_dir);
+
     match game {
       RetroGame::None { .. } => {
         println!("[libretro_rs] load_game()");
@@ -47,6 +42,7 @@ impl RetroCore for Emulator {
       region: RetroRegion::NTSC,
       audio: RetroAudioInfo::new(44_100.0),
       video: RetroVideoInfo::new(60.0, 256, 240),
+      core: Emulator,
     }
   }
 }

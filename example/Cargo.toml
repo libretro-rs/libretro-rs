@@ -1,7 +1,7 @@
 [package]
 name = "example"
 version = "0.1.0"
-authors = ["Adam Becker <im.adam.becker@gmail.com>"]
+authors = ["Adam Becker <apbecker@protonmail.com>"]
 edition = "2021"
 
 [dependencies]
