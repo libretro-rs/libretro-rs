@@ -111,6 +111,10 @@ impl TryFrom<u32> for RetroDevice {
 pub struct RetroDevicePort(u32);
 
 impl RetroDevicePort {
+  pub fn new(port_num: u32) -> Self {
+    RetroDevicePort(port_num)
+  }
+
   pub fn into_inner(self) -> u32 {
     self.0
   }
