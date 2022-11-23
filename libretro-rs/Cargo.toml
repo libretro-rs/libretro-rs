@@ -5,7 +5,7 @@ readme = "README.md"
 repository = "https://github.com/libretro-rs/libretro-rs"
 license = "MIT/Apache-2.0"
 version = "0.1.3"
-authors = ["Adam Becker <im.adam.becker@gmail.com>"]
+authors = ["Adam Becker <apbecker@protonmail.com>"]
 edition = "2021"
 
 [dependencies]

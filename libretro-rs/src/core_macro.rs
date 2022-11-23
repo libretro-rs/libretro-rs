@@ -37,7 +37,7 @@ macro_rules! libretro_core {
 
       #[no_mangle]
       extern "C" fn retro_init() {
-        instance_mut(|instance| instance.on_init())
+        instance_ref(|instance| instance.on_init())
       }
 
       #[no_mangle]

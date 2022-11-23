@@ -6,12 +6,12 @@ use std::ffi::{CStr, CString};
 use sys::*;
 
 #[allow(unused_variables)]
-pub trait RetroCore {
+pub trait RetroCore: Sized {
   const SUPPORT_NO_GAME: bool = false;
 
-  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
-  /// required for the core to function properly.
-  fn init(env: &RetroEnvironment) -> Self;
+  /// Called during `retro_init()`. This function is provided for the sake of completeness; it's generally redundant
+  /// with [load_game].
+  fn init(env: &RetroEnvironment) {}
 
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
@@ -49,7 +49,9 @@ pub trait RetroCore {
 
   fn cheat_set(&mut self, env: &RetroEnvironment, index: u32, enabled: bool, code: &str) {}
 
-  fn load_game(&mut self, env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult;
+  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
+  /// required for the core to function properly.
+  fn load_game(env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self>;
 
   fn load_game_special(&mut self, env: &RetroEnvironment, game_type: u32, info: RetroGame, num_info: usize) -> bool {
     false
@@ -336,12 +338,13 @@ impl Into<u32> for RetroJoypadButton {
 }
 
 #[must_use]
-pub enum RetroLoadGameResult {
+pub enum RetroLoadGameResult<T> {
   Failure,
   Success {
     region: RetroRegion,
     audio: RetroAudioInfo,
     video: RetroVideoInfo,
+    core: T,
   },
 }
 
@@ -586,9 +589,9 @@ impl<T: RetroCore> RetroInstance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_init` API call.
-  pub fn on_init(&mut self) {
+  pub fn on_init(&self) {
     let env = self.environment();
-    self.system = Some(T::init(&env))
+    T::init(&env);
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_deinit` API call.
@@ -718,12 +721,13 @@ impl<T: RetroCore> RetroInstance<T> {
   pub fn on_load_game(&mut self, game: &retro_game_info) -> bool {
     let env = self.environment();
 
-    match self.core_mut(|core| core.load_game(&env, game.into())) {
+    match T::load_game(&env, game.into()) {
       RetroLoadGameResult::Failure => {
         self.system_av_info = None;
         false
       }
-      RetroLoadGameResult::Success { region, audio, video } => {
+      RetroLoadGameResult::Success { region, audio, video, core } => {
+        self.system = Some(core);
         self.system_region = Some(region);
         self.system_av_info = Some(RetroSystemAvInfo { audio, video });
         true
