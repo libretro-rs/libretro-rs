@@ -719,7 +719,7 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
   pub fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
-    let env = self.environment();
+    let mut env = self.environment();
 
     let game = if game.is_null() {
       RetroGame::None { meta: None }
@@ -728,7 +728,7 @@ impl<T: RetroCore> RetroInstance<T> {
       unsafe { (&*game).into() }
     };
 
-    match T::load_game(&env, game) {
+    match T::load_game(&mut env, game) {
       RetroLoadGameResult::Failure => {
         self.system_av_info = None;
         false
