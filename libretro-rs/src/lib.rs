@@ -718,10 +718,17 @@ impl<T: RetroCore> RetroInstance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
-  pub fn on_load_game(&mut self, game: &retro_game_info) -> bool {
+  pub fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
     let mut env = self.environment();
 
-    match T::load_game(&mut env, game.into()) {
+    let game = if game.is_null() {
+      RetroGame::None { meta: None }
+    } else {
+      // safety: null was checked for, dereferencing is safe.
+      unsafe { (&*game).into() }
+    };
+
+    match T::load_game(&mut env, game) {
       RetroLoadGameResult::Failure => {
         self.system_av_info = None;
         false

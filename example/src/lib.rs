@@ -9,19 +9,19 @@ impl RetroCore for Emulator {
     RetroSystemInfo::new("emulator", env!("CARGO_PKG_VERSION"))
   }
 
-  fn set_controller_port_device(&mut self, _: &RetroEnvironment, port: RetroDevicePort, device: RetroDevice) {
+  fn set_controller_port_device(&mut self, _: &mut RetroEnvironment, port: RetroDevicePort, device: RetroDevice) {
     println!("[libretro_rs] set_controller_port_device({:?}, {:?})", port, device);
   }
 
-  fn reset(&mut self, _: &RetroEnvironment) {
+  fn reset(&mut self, _: &mut RetroEnvironment) {
     println!("[libretro_rs] reset()");
   }
 
-  fn run(&mut self, _: &RetroEnvironment, _: &RetroRuntime) {
+  fn run(&mut self, _: &mut RetroEnvironment, _: &RetroRuntime) {
     println!("[libretro_rs] run()");
   }
 
-  fn load_game(env: &RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
+  fn load_game(env: &mut RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
     let system_dir = env.get_system_directory().unwrap_or("~/.config/emulator");
     println!("[libretro_rs] load_game(). system_dir={}", system_dir);
 
