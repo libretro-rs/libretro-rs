@@ -3,6 +3,7 @@ pub use libretro_rs_sys as sys;
 pub mod core_macro;
 
 use std::ffi::{CStr, CString};
+use libretro_rs_sys::libc::c_uint;
 use sys::*;
 
 #[allow(unused_variables)]
@@ -106,16 +107,27 @@ impl TryFrom<u32> for RetroDevice {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct RetroDevicePort(u32);
+/// A libretro device port.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RetroDevicePort(c_uint);
 
 impl RetroDevicePort {
-  pub fn new(port_num: u32) -> Self {
-    RetroDevicePort(port_num)
+  /// Creates a [RetroDevicePort].
+  pub fn new(port_number: u8) -> Self {
+    RetroDevicePort(c_uint::from(port_number))
   }
+}
 
-  pub fn into_inner(self) -> u32 {
-    self.0
+impl From<u8> for RetroDevicePort {
+  fn from(port_number: u8) -> Self {
+    Self::new(port_number)
+  }
+}
+
+impl From<RetroDevicePort> for c_uint {
+  fn from(port: RetroDevicePort) -> Self {
+    port.0
   }
 }
 
