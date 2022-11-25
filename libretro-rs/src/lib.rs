@@ -7,7 +7,8 @@ use sys::*;
 
 #[allow(unused_variables)]
 pub trait RetroCore: Sized {
-  const SUPPORT_NO_GAME: bool = false;
+  /// Called during `retro_set_environment`.
+  fn set_environment(env: &mut RetroEnvironment) {}
 
   /// Called during `retro_init()`. This function is provided for the sake of completeness; it's generally redundant
   /// with [load_game].
@@ -608,7 +609,7 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_set_environment` API call.
   pub fn on_set_environment(&mut self, cb: retro_environment_t) {
     let mut env = RetroEnvironment::new(cb);
-    env.set_support_no_game(T::SUPPORT_NO_GAME);
+    T::set_environment(&mut env);
 
     self.environment = Some(env);
   }
