@@ -6,8 +6,5 @@ version = "0.1.0"
 authors = ["Adam Becker <apbecker@protonmail.com>"]
 edition = "2021"
 
-[dependencies]
-libc = "0.2"
-
 [build-dependencies]
-bindgen = "0.59"
+bindgen = "0.63.0"

@@ -10,3 +10,4 @@ edition = "2021"
 
 [dependencies]
 libretro-rs-sys = { path = "../libretro-rs-sys" }
+c_utf8 = "0.1.0"
