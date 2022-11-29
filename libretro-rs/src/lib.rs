@@ -5,6 +5,7 @@ mod av_info;
 mod environment;
 mod extensions;
 mod memory;
+mod option_cstr;
 mod system_info;
 
 pub use c_utf8;
@@ -12,6 +13,7 @@ pub use av_info::*;
 pub use environment::*;
 pub use extensions::*;
 pub use memory::*;
+pub use option_cstr::*;
 pub use system_info::*;
 
 pub use RetroLoadGameResult::*;
@@ -19,6 +21,7 @@ pub use RetroLoadGameResult::*;
 use core::ffi::*;
 use core::ops::*;
 use sys::*;
+use c_utf8::CUtf8;
 
 // u32 is a safe alias for c_uint since libretro.h defines RETRO_ENVIRONMENT_EXPERIMENTAL as 0x10000;
 // therefore command values are always larger than a u16, and no platform uses 64-bit c_uint.
@@ -171,35 +174,44 @@ pub enum RetroGame<'a> {
   /// * `meta` contains implementation-specific metadata, if present.
   ///
   /// **Note**: "No game" support is hinted with the `RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME` key.
-  None { meta: Option<&'a str> },
+  None { meta: OptionCStr<'a> },
   /// Used if a core doesn't need paths, and a game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   /// * `data` contains the entire contents of the game.
-  Data { meta: Option<&'a str>, data: &'a [u8] },
+  Data { meta: OptionCStr<'a>, data: &'a [u8] },
   /// Used if a core needs paths, and a game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   /// * `path` contains the entire absolute path of the game.
-  Path { meta: Option<&'a str>, path: &'a str },
+  Path { meta: OptionCStr<'a>, path: &'a CUtf8 },
+}
+
+impl<'a> From<Option<&retro_game_info>> for RetroGame<'a> {
+  fn from(info: Option<&retro_game_info>) -> Self {
+    match info {
+      None => RetroGame::None { meta: OptionCStr(None) },
+      Some(info) => RetroGame::from(info)
+    }
+  }
 }
 
 impl<'a> From<&retro_game_info> for RetroGame<'a> {
   fn from(game: &retro_game_info) -> RetroGame<'a> {
     let meta = if game.meta.is_null() {
-      None
+      OptionCStr(None)
     } else {
-      unsafe { CStr::from_ptr(game.meta).to_str().ok() }
+      unsafe { OptionCStr(Some(CStr::from_ptr(game.meta))) }
     };
 
     match (game.path.is_null(), game.data.is_null()) {
       (true, true) => RetroGame::None { meta },
       (_, false) => unsafe {
-        let data = core::slice::from_raw_parts(game.data as *const u8, game.size as usize);
+        let data = core::slice::from_raw_parts(game.data as *const u8, game.size);
         return RetroGame::Data { meta, data };
       },
       (false, _) => unsafe {
-        let path = CStr::from_ptr(game.path).to_str().expect("game path contains invalid data");
+        let path = CUtf8::from_c_str_unchecked(CStr::from_ptr(game.path));
         return RetroGame::Path { meta, path };
       },
     }
@@ -547,14 +559,7 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
   pub fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
     let mut env = self.environment();
-
-    let game = if game.is_null() {
-      RetroGame::None { meta: None }
-    } else {
-      // safety: null was checked for, dereferencing is safe.
-      unsafe { (&*game).into() }
-    };
-
+    let game = RetroGame::from(unsafe { game.as_ref() });
     if let Success(core) = T::load_game(&mut env, game) {
       self.system = Some(core);
       return true;

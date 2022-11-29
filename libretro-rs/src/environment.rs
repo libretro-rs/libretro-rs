@@ -1,8 +1,6 @@
 use crate::*;
-use crate::c_utf8::CUtf8;
 use core::ffi::*;
 use core::mem::*;
-use core::str::*;
 use libretro_rs_sys::*;
 
 impl RetroEnvironment for EnvironmentCallback {
@@ -15,7 +13,7 @@ impl RetroEnvironment for EnvironmentCallback {
     }
   }
 
-  unsafe fn set_raw<T>(&mut self, key: u32, val: T) -> bool where T: Copy {
+  unsafe fn set_raw<T>(&mut self, key: u32, val: &T) -> bool {
     self(key, &val as *const _ as *mut c_void)
   }
 
@@ -23,12 +21,8 @@ impl RetroEnvironment for EnvironmentCallback {
     self(key, core::ptr::null_mut())
   }
 
-  unsafe fn mut_struct_raw<T>(&mut self, key: u32, val: &mut T) -> bool {
+  unsafe fn mut_ref_raw<T>(&mut self, key: u32, val: &mut T) -> bool {
     self(key, val as *mut _ as *mut c_void)
-  }
-
-  unsafe fn set_struct_raw<T>(&mut self, key: u32, val: &T) -> bool {
-    self(key, val as *const _ as *mut c_void)
   }
 }
 
@@ -39,70 +33,53 @@ impl RetroEnvironment for EnvironmentCallback {
 pub trait RetroEnvironment: Sized {
   /// Boolean value indicating whether or not frontend supports frame duping.
   fn get_can_dupe(&self) -> bool {
-    unsafe { self.get_bool(RETRO_ENVIRONMENT_GET_CAN_DUPE) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_CAN_DUPE).unwrap_or(false) }
   }
 
   /// Queries the path where the current libretro core resides.
-  fn get_libretro_path(&self) -> Option<Result<&CUtf8, Utf8Error>> {
-    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
+  fn get_libretro_path(&self) -> OptionCStr {
+    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
   }
 
   /// Queries the path of the "core assets" directory.
-  fn get_core_assets_directory(&self) -> Option<Result<&CUtf8, Utf8Error>> {
-    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
+  fn get_core_assets_directory(&self) -> OptionCStr {
+    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
   }
 
   /// Queries the path of the save directory.
-  fn get_save_directory(&self) -> Option<Result<&CUtf8, Utf8Error>> {
-    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
+  fn get_save_directory(&self) -> OptionCStr {
+    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
   }
 
   /// Queries the path of the system directory.
-  fn get_system_directory(&self) -> Option<Result<&CUtf8, Utf8Error>> {
-    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
+  fn get_system_directory(&self) -> OptionCStr {
+    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
   }
 
   /// Queries the username associated with the frontend.
-  fn get_username(&self) -> Option<Result<&CUtf8, Utf8Error>> {
-    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_USERNAME) }
-  }
-
-  /// Convenience method for querying a [CUtf8] value with [Self::get_raw].
-  unsafe fn get_c_utf8(&self, key: u32) -> Option<Result<&CUtf8, Utf8Error>> {
-    self.get_c_str(key).map(|c_str| CUtf8::from_c_str(c_str))
-  }
-
-  /// Convenience method for querying a [CUtf8] value with [Self::get_raw].
-  ///
-  /// # Safety
-  /// The C string must be UTF-8 encoded. No validation will be performed.
-  unsafe fn get_c_utf8_unchecked(&self, key: u32) -> Option<&CUtf8> {
-    self.get_c_str(key).map(|c_str| CUtf8::from_c_str_unchecked(c_str))
+  fn get_username(&self) -> OptionCStr {
+    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_USERNAME) }
   }
 
   /// Convenience method for querying a [CStr] value with [Self::get_raw].
-  unsafe fn get_c_str(&self, key: u32) -> Option<&CStr> {
-    self.get_raw::<*const c_char>(key).map(|ptr| CStr::from_ptr(ptr))
+  unsafe fn get_c_str_raw(&self, key: u32) -> OptionCStr {
+    OptionCStr(self.get_raw(key).map(|ptr| CStr::from_ptr(ptr)))
   }
 
-  /// Gets a [bool] value with [get_raw], translating [None] to [false].
-  unsafe fn get_bool(&self, key: u32) -> bool {
-    self.get_raw(key).unwrap_or(false)
-  }
-
-  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion with a primitive value.
+  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
   /// To get a struct, see [Self::mut_struct_raw].
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
   unsafe fn get_raw<T>(&self, key: u32) -> Option<T> where T: Copy;
 
-  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion with a primitive value.
+  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   /// To set a struct, see [Self::set_struct_raw].
   ///
   /// # Safety
+  /// The environment command must **not** mutate `data`.
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_raw<T>(&mut self, key: u32, val: T) -> bool where T: Copy;
+  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool;
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
   ///
@@ -114,18 +91,12 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn mut_struct_raw<T>(&mut self, key: u32, val: &mut T) -> bool;
-
-  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
-  ///
-  /// # Safety
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_struct_raw<T>(&mut self, key: u32, val: &T) -> bool;
+  unsafe fn mut_ref_raw<T>(&mut self, key: u32, data: &mut T) -> bool;
 }
 
 pub trait SetEnvironmentEnvironment: RetroEnvironment {
   fn set_support_no_game(&mut self, val: bool) -> bool {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, val) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &val) }
   }
 }
 impl <T> SetEnvironmentEnvironment for T where T: RetroEnvironment {}
@@ -147,7 +118,7 @@ pub trait RunEnvironment: RetroEnvironment {
 
   fn set_geometry(&mut self, val: RetroGameGeometry) -> bool {
     let val: retro_game_geometry = val.into();
-    unsafe { self.set_struct_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &val) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &val) }
   }
 }
 impl <T> RunEnvironment for T where T: RetroEnvironment {}
@@ -176,7 +147,7 @@ impl <T> LoadGameEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetSystemAvInfoEnvironment: RetroEnvironment {
   fn set_pixel_format(&mut self, format: RetroPixelFormat) -> bool {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, u32::from(format)) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &u32::from(format)) }
   }
 }
 impl <T> GetSystemAvInfoEnvironment for T where T: RetroEnvironment {}
