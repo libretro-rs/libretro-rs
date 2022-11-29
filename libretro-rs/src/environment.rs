@@ -67,12 +67,12 @@ pub trait RetroEnvironment: Sized {
     unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_USERNAME) }
   }
 
-  /// Convenience method for querying a [CUtf8] value with [get_raw].
+  /// Convenience method for querying a [CUtf8] value with [Self::get_raw].
   unsafe fn get_c_utf8(&self, key: u32) -> Option<Result<&CUtf8, Utf8Error>> {
     self.get_c_str(key).map(|c_str| CUtf8::from_c_str(c_str))
   }
 
-  /// Convenience method for querying a [CUtf8] value with [get_raw].
+  /// Convenience method for querying a [CUtf8] value with [Self::get_raw].
   ///
   /// # Safety
   /// The C string must be UTF-8 encoded. No validation will be performed.
@@ -80,7 +80,7 @@ pub trait RetroEnvironment: Sized {
     self.get_c_str(key).map(|c_str| CUtf8::from_c_str_unchecked(c_str))
   }
 
-  /// Convenience method for querying a [CStr] value with [get_raw].
+  /// Convenience method for querying a [CStr] value with [Self::get_raw].
   unsafe fn get_c_str(&self, key: u32) -> Option<&CStr> {
     self.get_raw::<*const c_char>(key).map(|ptr| CStr::from_ptr(ptr))
   }
@@ -90,13 +90,15 @@ pub trait RetroEnvironment: Sized {
     self.get_raw(key).unwrap_or(false)
   }
 
-  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
+  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion with a primitive value.
+  /// To get a struct, see [Self::mut_struct_raw].
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
   unsafe fn get_raw<T>(&self, key: u32) -> Option<T> where T: Copy;
 
-  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
+  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion with a primitive value.
+  /// To set a struct, see [Self::set_struct_raw].
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
@@ -123,7 +125,7 @@ pub trait RetroEnvironment: Sized {
 
 pub trait SetEnvironmentEnvironment: RetroEnvironment {
   fn set_support_no_game(&mut self, val: bool) -> bool {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &val) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, val) }
   }
 }
 impl <T> SetEnvironmentEnvironment for T where T: RetroEnvironment {}
@@ -145,7 +147,7 @@ pub trait RunEnvironment: RetroEnvironment {
 
   fn set_geometry(&mut self, val: RetroGameGeometry) -> bool {
     let val: retro_game_geometry = val.into();
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &val) }
+    unsafe { self.set_struct_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &val) }
   }
 }
 impl <T> RunEnvironment for T where T: RetroEnvironment {}
@@ -174,7 +176,7 @@ impl <T> LoadGameEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetSystemAvInfoEnvironment: RetroEnvironment {
   fn set_pixel_format(&mut self, format: RetroPixelFormat) -> bool {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, u32::from(format)) }
   }
 }
 impl <T> GetSystemAvInfoEnvironment for T where T: RetroEnvironment {}

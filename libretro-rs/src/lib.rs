@@ -308,16 +308,16 @@ impl From<RetroRegion> for c_uint {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RetroPixelFormat {
   RGB1555,
   XRGB8888,
   RGB565,
 }
 
-impl Into<u32> for RetroPixelFormat {
-  fn into(self) -> u32 {
-    match self {
+impl From<RetroPixelFormat> for u32 {
+  fn from(format: RetroPixelFormat) -> u32 {
+    match format {
       RetroPixelFormat::RGB1555 => 0,
       RetroPixelFormat::XRGB8888 => 1,
       RetroPixelFormat::RGB565 => 2,
