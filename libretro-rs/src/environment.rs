@@ -1,6 +1,8 @@
 use crate::*;
+use crate::c_utf8::CUtf8;
 use core::ffi::*;
-use core::mem::MaybeUninit;
+use core::mem::*;
+use core::str::*;
 use libretro_rs_sys::*;
 
 impl RetroEnvironment for EnvironmentCallback {
@@ -41,37 +43,49 @@ pub trait RetroEnvironment: Sized {
   }
 
   /// Queries the path where the current libretro core resides.
-  fn get_libretro_path(&self) -> Option<&str> {
-    unsafe { self.get_str(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
+  fn get_libretro_path(&self) -> Option<Result<&CUtf8, Utf8Error>> {
+    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
   }
 
   /// Queries the path of the "core assets" directory.
-  fn get_core_assets_directory(&self) -> Option<&str> {
-    unsafe { self.get_str(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
+  fn get_core_assets_directory(&self) -> Option<Result<&CUtf8, Utf8Error>> {
+    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
   }
 
   /// Queries the path of the save directory.
-  fn get_save_directory(&self) -> Option<&str> {
-    unsafe { self.get_str(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
+  fn get_save_directory(&self) -> Option<Result<&CUtf8, Utf8Error>> {
+    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
   }
 
   /// Queries the path of the system directory.
-  fn get_system_directory(&self) -> Option<&str> {
-    unsafe { self.get_str(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
+  fn get_system_directory(&self) -> Option<Result<&CUtf8, Utf8Error>> {
+    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
   }
 
   /// Queries the username associated with the frontend.
-  fn get_username(&self) -> Option<&str> {
-    unsafe { self.get_str(RETRO_ENVIRONMENT_GET_USERNAME) }
+  fn get_username(&self) -> Option<Result<&CUtf8, Utf8Error>> {
+    unsafe { self.get_c_utf8(RETRO_ENVIRONMENT_GET_USERNAME) }
   }
 
-  /// Convenience method for querying a [&str] value with [get_copyable_raw].
-  unsafe fn get_str(&self, key: u32) -> Option<&str> {
-    self.get_raw::<*const c_char>(key)
-      .map(|ptr| CStr::from_ptr(ptr).to_str().unwrap())
+  /// Convenience method for querying a [CUtf8] value with [get_raw].
+  unsafe fn get_c_utf8(&self, key: u32) -> Option<Result<&CUtf8, Utf8Error>> {
+    self.get_c_str(key).map(|c_str| CUtf8::from_c_str(c_str))
   }
 
-  /// Gets a [bool] value with [get_copyable_raw], translating [None] to [false].
+  /// Convenience method for querying a [CUtf8] value with [get_raw].
+  ///
+  /// # Safety
+  /// The C string must be UTF-8 encoded. No validation will be performed.
+  unsafe fn get_c_utf8_unchecked(&self, key: u32) -> Option<&CUtf8> {
+    self.get_c_str(key).map(|c_str| CUtf8::from_c_str_unchecked(c_str))
+  }
+
+  /// Convenience method for querying a [CStr] value with [get_raw].
+  unsafe fn get_c_str(&self, key: u32) -> Option<&CStr> {
+    self.get_raw::<*const c_char>(key).map(|ptr| CStr::from_ptr(ptr))
+  }
+
+  /// Gets a [bool] value with [get_raw], translating [None] to [false].
   unsafe fn get_bool(&self, key: u32) -> bool {
     self.get_raw(key).unwrap_or(false)
   }

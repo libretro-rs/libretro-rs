@@ -1,6 +1,6 @@
 use libretro_rs::*;
 use libretro_rs::sys::*;
-use c_utf8::c_utf8;
+use libretro_rs::c_utf8::*;
 
 pub struct Emulator;
 
@@ -27,7 +27,10 @@ impl RetroCore for Emulator {
   }
 
   fn load_game(env: &mut impl LoadGameEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
-    let system_dir = env.get_system_directory().unwrap_or("~/.config/emulator");
+    let system_dir = match env.get_system_directory() {
+      Some(Ok(value)) => value.as_str(),
+      _ => "~/.config/emulator"
+    };
     println!("[libretro_rs] load_game(). system_dir={}", system_dir);
 
     match game {

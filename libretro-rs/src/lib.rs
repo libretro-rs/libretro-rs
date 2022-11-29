@@ -254,6 +254,42 @@ pub enum RetroLoadGameResult<T> {
   Success(T),
 }
 
+impl <T> From<RetroLoadGameResult<T>> for Option<T> where T: RetroCore {
+  fn from(result: RetroLoadGameResult<T>) -> Self {
+    match result {
+      Failure => None,
+      Success(core) => Some(core)
+    }
+  }
+}
+
+impl <T> From<Option<T>> for RetroLoadGameResult<T> where T: RetroCore {
+  fn from(option: Option<T>) -> Self {
+    match option {
+      None => Failure,
+      Some(core) => Success(core)
+    }
+  }
+}
+
+impl <T, E> From<Result<T, E>> for RetroLoadGameResult<T> where T: RetroCore {
+  fn from(result: Result<T, E>) -> Self {
+    match result {
+      Err(_) => Failure,
+      Ok(core) => Success(core)
+    }
+  }
+}
+
+impl <T> From<RetroLoadGameResult<T>> for Result<T, ()> where T: RetroCore {
+  fn from(result: RetroLoadGameResult<T>) -> Self {
+    match result {
+      Failure => Err(()),
+      Success(core) => Ok(core)
+    }
+  }
+}
+
 /// Represents the set of regions supported by `libretro`.
 #[derive(Clone, Copy)]
 pub enum RetroRegion {
