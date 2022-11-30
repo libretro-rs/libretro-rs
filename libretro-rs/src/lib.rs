@@ -107,12 +107,32 @@ impl TryFrom<u32> for RetroDevice {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct RetroDevicePort(u32);
+/// A libretro device port.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RetroDevicePort(u8);
 
 impl RetroDevicePort {
-  pub fn into_inner(self) -> u32 {
+  /// Creates a [RetroDevicePort].
+  pub fn new(port_number: u8) -> Self {
+    RetroDevicePort(port_number)
+  }
+
+  // Converts this port back into a u8.
+  pub fn into_inner(self) -> u8 {
     self.0
+  }
+}
+
+impl From<u8> for RetroDevicePort {
+  fn from(port_number: u8) -> Self {
+    Self::new(port_number)
+  }
+}
+
+impl From<RetroDevicePort> for u8 {
+  fn from(port: RetroDevicePort) -> Self {
+    port.into_inner()
   }
 }
 
@@ -439,12 +459,11 @@ impl RetroRuntime {
       .input_state
       .expect("`is_joypad_button_pressed` called without registering an `input_state` callback");
 
+    let port = libc::c_uint::from(port.into_inner());
+    let device = RETRO_DEVICE_JOYPAD;
+    let index = 0;
+    let id = btn.into();
     unsafe {
-      let port = port.0;
-      let device = RETRO_DEVICE_JOYPAD;
-      let index = 0;
-      let id = btn.into();
-
       cb(port, device, index, id) != 0
     }
   }
@@ -642,9 +661,11 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
   pub fn on_set_controller_port_device(&mut self, port: libc::c_uint, device: libc::c_uint) {
     if let Ok(device) = device.try_into() {
-      let mut env = self.environment();
-      let port = RetroDevicePort(port);
-      self.core_mut(|core| core.set_controller_port_device(&mut env, port, device))
+      if let Ok(port_num) = u8::try_from(port) {
+        let mut env = self.environment();
+        let port = RetroDevicePort(port_num);
+        self.core_mut(|core| core.set_controller_port_device(&mut env, port, device))
+      }
     }
   }
 
