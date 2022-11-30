@@ -5,24 +5,24 @@ use libretro_rs_sys::*;
 
 impl RetroEnvironment for EnvironmentCallback {
   unsafe fn get_raw<T>(&self, key: u32) -> Option<T> where T: Copy {
-    let mut value = MaybeUninit::uninit();
-    if self(key, value.as_mut_ptr() as *mut _ as *mut c_void) {
-      unsafe { Some(value.assume_init()) }
+    let mut data = MaybeUninit::uninit();
+    if self(key, data.as_mut_ptr() as *mut _ as *mut c_void) {
+      unsafe { Some(data.assume_init()) }
     } else {
       None
     }
   }
 
-  unsafe fn set_raw<T>(&mut self, key: u32, val: &T) -> bool {
-    self(key, &val as *const _ as *mut c_void)
+  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool {
+    self(key, &data as *const _ as *mut c_void)
   }
 
   unsafe fn cmd_raw(&mut self, key: u32) -> bool {
     self(key, core::ptr::null_mut())
   }
 
-  unsafe fn mut_ref_raw<T>(&mut self, key: u32, val: &mut T) -> bool {
-    self(key, val as *mut _ as *mut c_void)
+  unsafe fn mut_ref_raw<T>(&mut self, key: u32, data: &mut T) -> bool {
+    self(key, data as *mut _ as *mut c_void)
   }
 }
 
@@ -70,6 +70,7 @@ pub trait RetroEnvironment: Sized {
   /// To get a struct, see [Self::mut_struct_raw].
   ///
   /// # Safety
+  /// The environment command **must** return a value when successful.
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
   unsafe fn get_raw<T>(&self, key: u32) -> Option<T> where T: Copy;
 
@@ -95,8 +96,8 @@ pub trait RetroEnvironment: Sized {
 }
 
 pub trait SetEnvironmentEnvironment: RetroEnvironment {
-  fn set_support_no_game(&mut self, val: bool) -> bool {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &val) }
+  fn set_support_no_game(&mut self, data: bool) -> bool {
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &data) }
   }
 }
 impl <T> SetEnvironmentEnvironment for T where T: RetroEnvironment {}
@@ -116,9 +117,9 @@ pub trait RunEnvironment: RetroEnvironment {
     unsafe { self.cmd_raw(RETRO_ENVIRONMENT_SHUTDOWN) }
   }
 
-  fn set_geometry(&mut self, val: RetroGameGeometry) -> bool {
-    let val: retro_game_geometry = val.into();
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &val) }
+  fn set_geometry(&mut self, geometry: RetroGameGeometry) -> bool {
+    let data: retro_game_geometry = geometry.into();
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &data) }
   }
 }
 impl <T> RunEnvironment for T where T: RetroEnvironment {}

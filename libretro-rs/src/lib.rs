@@ -198,21 +198,17 @@ impl<'a> From<Option<&retro_game_info>> for RetroGame<'a> {
 
 impl<'a> From<&retro_game_info> for RetroGame<'a> {
   fn from(game: &retro_game_info) -> RetroGame<'a> {
-    let meta = if game.meta.is_null() {
-      OptionCStr(None)
-    } else {
-      unsafe { OptionCStr(Some(CStr::from_ptr(game.meta))) }
-    };
+    let meta = unsafe { OptionCStr::from_ptr(game.meta) };
 
     match (game.path.is_null(), game.data.is_null()) {
       (true, true) => RetroGame::None { meta },
       (_, false) => unsafe {
         let data = core::slice::from_raw_parts(game.data as *const u8, game.size);
-        return RetroGame::Data { meta, data };
+        RetroGame::Data { meta, data }
       },
       (false, _) => unsafe {
         let path = CUtf8::from_c_str_unchecked(CStr::from_ptr(game.path));
-        return RetroGame::Path { meta, path };
+        RetroGame::Path { meta, path }
       },
     }
   }
