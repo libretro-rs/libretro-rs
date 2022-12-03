@@ -53,6 +53,9 @@ pub trait RetroEnvironment: Sized {
 
   /// Calls [RetroEnvironment::get_raw] with `T::default()`.
   /// Equivalent to `self.get_option_raw(key).unwrap_or_default()`.
+  ///
+  /// # Safety
+  /// See [RetroEnvironment::get_raw].
   unsafe fn get_or_default_raw<T>(&self, key: u32) -> T
   where
     T: Copy + Default,
@@ -124,7 +127,7 @@ pub trait RetroEnvironment: Sized {
   unsafe fn cmd_raw(&mut self, key: u32) -> bool {
     // Safety: A command that takes no data is expecting a *mut c_void pointer,
     // which can't be dereferenced.
-    self.set_raw(key, &mut ())
+    self.set_raw(key, &())
   }
 
   /// Sets screen rotation of graphics.
@@ -190,9 +193,8 @@ pub trait RetroEnvironment: Sized {
   /// to [std::io::Stderr] (via [eprintln], [StderrLogger] or [FallbackLogger]) as desired.
   fn get_log_interface(&self) -> Option<PlatformLogger> {
     unsafe { self.get_option_raw(RETRO_ENVIRONMENT_GET_LOG_INTERFACE) }
-      .map(|cb: retro_log_callback| cb.log)
-      .flatten()
-      .map(|ptr| PlatformLogger::new(ptr))
+      .and_then(|cb: retro_log_callback| cb.log)
+      .map(PlatformLogger::new)
   }
 }
 

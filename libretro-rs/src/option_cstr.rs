@@ -9,6 +9,7 @@ pub struct OptionCStr<'a>(pub Option<&'a CStr>);
 
 impl<'a> OptionCStr<'a> {
   /// Maps null pointers to [None]; otherwise applies [CStr::from_ptr].
+  ///
   /// # Examples
   /// ```
   /// use std::ffi::{CStr, CString};
@@ -21,6 +22,9 @@ impl<'a> OptionCStr<'a> {
   /// }
   ///
   /// ```
+  ///
+  /// # Safety
+  /// See [CStr::from_ptr].
   pub unsafe fn from_ptr(ptr: *const c_char) -> Self {
     Self(if ptr.is_null() { None } else { Some(CStr::from_ptr(ptr)) })
   }
@@ -46,7 +50,7 @@ impl<'a> OptionCStr<'a> {
   ///     Some(CUtf8::from_c_str(utf8.as_ref()).unwrap()));
   /// ```
   pub fn as_c_utf8(&self) -> Option<&'a CUtf8> {
-    self.0.map(|x| CUtf8::from_c_str(x).ok()).flatten()
+    self.0.and_then(|x| CUtf8::from_c_str(x).ok())
   }
 
   /// Equivalent to `self.as_c_utf8().map(|x| x.as_str())`.

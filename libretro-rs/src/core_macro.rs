@@ -110,12 +110,12 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_cheat_set(index: c_uint, enabled: bool, code: *const c_char) {
+      unsafe extern "C" fn retro_cheat_set(index: c_uint, enabled: bool, code: *const c_char) {
         instance_mut(|instance| instance.on_cheat_set(index, enabled, code))
       }
 
       #[no_mangle]
-      extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
+      unsafe extern "C" fn retro_load_game(game: *const retro_game_info) -> bool {
         instance_mut(|instance| instance.on_load_game(game))
       }
 
