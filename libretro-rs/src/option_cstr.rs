@@ -55,6 +55,12 @@ impl <'a> OptionCStr<'a> {
   }
 }
 
+impl <'a> From<Option<&'a CStr>> for OptionCStr<'a> {
+  fn from(c_str: Option<&'a CStr>) -> Self {
+    Self(c_str)
+  }
+}
+
 impl <'a> Deref for OptionCStr<'a> {
   type Target = Option<&'a CStr>;
 

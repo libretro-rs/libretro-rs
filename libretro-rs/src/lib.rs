@@ -4,6 +4,7 @@ pub mod core_macro;
 mod av_info;
 mod environment;
 mod extensions;
+mod logger;
 mod memory;
 mod option_cstr;
 mod system_info;
@@ -12,6 +13,7 @@ pub use c_utf8;
 pub use av_info::*;
 pub use environment::*;
 pub use extensions::*;
+pub use logger::*;
 pub use memory::*;
 pub use option_cstr::*;
 pub use system_info::*;
@@ -316,21 +318,13 @@ impl From<RetroRegion> for c_uint {
   }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 pub enum RetroPixelFormat {
-  RGB1555,
-  XRGB8888,
-  RGB565,
-}
-
-impl From<RetroPixelFormat> for u32 {
-  fn from(format: RetroPixelFormat) -> u32 {
-    match format {
-      RetroPixelFormat::RGB1555 => 0,
-      RetroPixelFormat::XRGB8888 => 1,
-      RetroPixelFormat::RGB565 => 2,
-    }
-  }
+  #[default]
+  RGB1555 = 0,
+  XRGB8888 = 1,
+  RGB565 = 2,
 }
 
 pub struct RetroRuntime {

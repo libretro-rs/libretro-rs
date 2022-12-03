@@ -9,37 +9,37 @@ impl RetroCore for Emulator {
   type SubsystemMemoryType = NotApplicable;
 
   fn get_system_info() -> RetroSystemInfo {
-    println!("[libretro_rs] get_system_info()");
+    eprintln!("[libretro_rs] get_system_info()");
 
     RetroSystemInfo::new(c_utf8!("emulator"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions![])
   }
 
   fn set_controller_port_device(&mut self, _: &mut impl SetPortDeviceEnvironment, port: RetroDevicePort, device: RetroDevice) {
-    println!("[libretro_rs] set_controller_port_device({:?}, {:?})", port, device);
+    eprintln!("[libretro_rs] set_controller_port_device({:?}, {:?})", port, device);
   }
 
   fn reset(&mut self, _: &mut impl ResetEnvironment) {
-    println!("[libretro_rs] reset()");
+    eprintln!("[libretro_rs] reset()");
   }
 
   fn run(&mut self, _: &mut impl RunEnvironment, _: &RetroRuntime) {
-    println!("[libretro_rs] run()");
+    eprintln!("[libretro_rs] run()");
   }
 
   fn load_game(env: &mut impl LoadGameEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
     let system_dir = env.get_system_directory().as_str().unwrap_or("~/.config/emulator");
-    println!("[libretro_rs] load_game(). system_dir={}", system_dir);
+    eprintln!("[libretro_rs] load_game(). system_dir={}", system_dir);
 
     match game {
       RetroGame::None { .. } => {
-        println!("[libretro_rs] load_game()");
+        eprintln!("[libretro_rs] load_game()");
         return Failure;
       }
       RetroGame::Data { .. } => {
-        println!("[libretro_rs] load_game(&[...])");
+        eprintln!("[libretro_rs] load_game(&[...])");
       }
       RetroGame::Path { path, .. } => {
-        println!("[libretro_rs] load_game({})", path);
+        eprintln!("[libretro_rs] load_game({})", path);
       }
     }
 
