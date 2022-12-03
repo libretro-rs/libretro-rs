@@ -3,11 +3,17 @@ use core::ffi::*;
 use libretro_rs_sys::*;
 
 impl RetroEnvironment for EnvironmentCallback {
-  unsafe fn get_raw<T>(&self, key: u32, data: &mut T) -> bool where T: Copy {
+  unsafe fn get_raw<T>(&self, key: u32, data: &mut T) -> bool
+  where
+    T: Copy,
+  {
     self(key, data as *mut _ as *mut c_void)
   }
 
-  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool where T: Copy {
+  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool
+  where
+    T: Copy,
+  {
     self(key, data as *const _ as *mut c_void)
   }
 }
@@ -16,11 +22,17 @@ impl RetroEnvironment for EnvironmentCallback {
 pub struct NullEnvironment;
 
 impl RetroEnvironment for NullEnvironment {
-  unsafe fn get_raw<T>(&self, _key: u32, _data: &mut T) -> bool where T: Copy {
+  unsafe fn get_raw<T>(&self, _key: u32, _data: &mut T) -> bool
+  where
+    T: Copy,
+  {
     false
   }
 
-  unsafe fn set_raw<T>(&mut self, _key: u32, _data: &T) -> bool where T: Copy {
+  unsafe fn set_raw<T>(&mut self, _key: u32, _data: &T) -> bool
+  where
+    T: Copy,
+  {
     false
   }
 }
@@ -35,11 +47,16 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn get_raw<T>(&self, key: u32, data: &mut T) -> bool where T: Copy;
+  unsafe fn get_raw<T>(&self, key: u32, data: &mut T) -> bool
+  where
+    T: Copy;
 
   /// Calls [RetroEnvironment::get_raw] with `T::default()`.
   /// Equivalent to `self.get_option_raw(key).unwrap_or_default()`.
-  unsafe fn get_or_default_raw<T>(&self, key: u32) -> T where T: Copy + Default {
+  unsafe fn get_or_default_raw<T>(&self, key: u32) -> T
+  where
+    T: Copy + Default,
+  {
     let mut result = T::default();
     self.get_raw(key, &mut result);
     result
@@ -50,9 +67,16 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn get_option_raw<T>(&self, key: u32) -> Option<T> where T: Copy + Default {
+  unsafe fn get_option_raw<T>(&self, key: u32) -> Option<T>
+  where
+    T: Copy + Default,
+  {
     let mut data = T::default();
-    if self.get_raw(key, &mut data) { Some(data) } else { None }
+    if self.get_raw(key, &mut data) {
+      Some(data)
+    } else {
+      None
+    }
   }
 
   /// Gets a `*const c_char` from [RetroEnvironment::get_raw] and converts it into a [CStr].
@@ -60,7 +84,11 @@ pub trait RetroEnvironment: Sized {
   /// # Safety
   /// See [CStr::from_ptr].
   unsafe fn get_c_str_raw(&self, key: u32) -> OptionCStr {
-    self.get_option_raw(key).flatten().map(|ptr: &c_char| CStr::from_ptr(ptr)).into()
+    self
+      .get_option_raw(key)
+      .flatten()
+      .map(|ptr: &c_char| CStr::from_ptr(ptr))
+      .into()
   }
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
@@ -69,14 +97,19 @@ pub trait RetroEnvironment: Sized {
   /// The environment command **must not** modify `data`.
   ///
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool where T: Copy;
+  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool
+  where
+    T: Copy;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   /// The command may mutate `data`.
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_mut_raw<T>(&mut self, key: u32, data: &mut T) -> bool where T: Copy {
+  unsafe fn set_mut_raw<T>(&mut self, key: u32, data: &mut T) -> bool
+  where
+    T: Copy,
+  {
     // Internally, get_raw and set_mut_raw are the same operation;
     // they both have the potential to mutate data. The only difference between
     // them is whether higher-level methods use &self or &mut self.
@@ -168,16 +201,16 @@ pub trait SetEnvironmentEnvironment: RetroEnvironment {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &data) }
   }
 }
-impl <T> SetEnvironmentEnvironment for T where T: RetroEnvironment {}
+impl<T> SetEnvironmentEnvironment for T where T: RetroEnvironment {}
 
 pub trait InitEnvironment: RetroEnvironment {}
-impl <T> InitEnvironment for T where T: RetroEnvironment {}
+impl<T> InitEnvironment for T where T: RetroEnvironment {}
 
 pub trait SetPortDeviceEnvironment: RetroEnvironment {}
-impl <T> SetPortDeviceEnvironment for T where T: RetroEnvironment {}
+impl<T> SetPortDeviceEnvironment for T where T: RetroEnvironment {}
 
 pub trait ResetEnvironment: RetroEnvironment {}
-impl <T> ResetEnvironment for T where T: RetroEnvironment {}
+impl<T> ResetEnvironment for T where T: RetroEnvironment {}
 
 pub trait RunEnvironment: RetroEnvironment {
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
@@ -190,22 +223,22 @@ pub trait RunEnvironment: RetroEnvironment {
     unsafe { self.set_mut_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &mut data) }
   }
 }
-impl <T> RunEnvironment for T where T: RetroEnvironment {}
+impl<T> RunEnvironment for T where T: RetroEnvironment {}
 
 pub trait SerializeSizeEnvironment: RetroEnvironment {}
-impl <T> SerializeSizeEnvironment for T where T: RetroEnvironment {}
+impl<T> SerializeSizeEnvironment for T where T: RetroEnvironment {}
 
 pub trait SerializeEnvironment: RetroEnvironment {}
-impl <T> SerializeEnvironment for T where T: RetroEnvironment {}
+impl<T> SerializeEnvironment for T where T: RetroEnvironment {}
 
 pub trait UnserializeEnvironment: RetroEnvironment {}
-impl <T> UnserializeEnvironment for T where T: RetroEnvironment {}
+impl<T> UnserializeEnvironment for T where T: RetroEnvironment {}
 
 pub trait CheatResetEnvironment: RetroEnvironment {}
-impl <T> CheatResetEnvironment for T where T: RetroEnvironment {}
+impl<T> CheatResetEnvironment for T where T: RetroEnvironment {}
 
 pub trait CheatSetEnvironment: RetroEnvironment {}
-impl <T> CheatSetEnvironment for T where T: RetroEnvironment {}
+impl<T> CheatSetEnvironment for T where T: RetroEnvironment {}
 
 pub trait LoadGameEnvironment: RetroEnvironment {
   /// Gives a hint to the frontend how demanding this implementation is on a system. E.g. Reporting
@@ -229,7 +262,7 @@ pub trait LoadGameEnvironment: RetroEnvironment {
     GetSystemAvInfoEnvironment::set_pixel_format(self, format)
   }
 }
-impl <T> LoadGameEnvironment for T where T: RetroEnvironment {}
+impl<T> LoadGameEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetSystemAvInfoEnvironment: RetroEnvironment {
   /// Sets the internal pixel format used by the implementation.
@@ -240,22 +273,22 @@ pub trait GetSystemAvInfoEnvironment: RetroEnvironment {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format) }
   }
 }
-impl <T> GetSystemAvInfoEnvironment for T where T: RetroEnvironment {}
+impl<T> GetSystemAvInfoEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetRegionEnvironment: RetroEnvironment {}
-impl <T> GetRegionEnvironment for T where T: RetroEnvironment {}
+impl<T> GetRegionEnvironment for T where T: RetroEnvironment {}
 
 pub trait LoadGameSpecialEnvironment: RetroEnvironment {}
-impl <T> LoadGameSpecialEnvironment for T where T: RetroEnvironment {}
+impl<T> LoadGameSpecialEnvironment for T where T: RetroEnvironment {}
 
 pub trait UnloadGameEnvironment: RetroEnvironment {}
-impl <T> UnloadGameEnvironment for T where T: RetroEnvironment {}
+impl<T> UnloadGameEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetMemoryDataEnvironment: RetroEnvironment {}
-impl <T> GetMemoryDataEnvironment for T where T: RetroEnvironment {}
+impl<T> GetMemoryDataEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetMemorySizeEnvironment: RetroEnvironment {}
-impl <T> GetMemorySizeEnvironment for T where T: RetroEnvironment {}
+impl<T> GetMemorySizeEnvironment for T where T: RetroEnvironment {}
 
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -264,7 +297,7 @@ pub enum ScreenRotation {
   ZeroDegrees = 0,
   NinetyDegrees = 1,
   OneEightyDegrees = 2,
-  TwoSeventyDegrees = 3
+  TwoSeventyDegrees = 3,
 }
 
 #[repr(transparent)]
@@ -273,7 +306,10 @@ pub struct RetroMessage(retro_message);
 
 impl RetroMessage {
   pub fn new<'a>(msg: impl Into<&'a CUtf8>, frames: u32) -> Self {
-    Self(retro_message { msg: msg.into().as_ptr(), frames })
+    Self(retro_message {
+      msg: msg.into().as_ptr(),
+      frames,
+    })
   }
 
   pub fn msg(&self) -> &CUtf8 {

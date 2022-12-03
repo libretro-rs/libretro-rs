@@ -1,6 +1,6 @@
-use libretro_rs::*;
-use libretro_rs::sys::*;
 use libretro_rs::c_utf8::*;
+use libretro_rs::sys::*;
+use libretro_rs::*;
 
 pub struct Emulator;
 

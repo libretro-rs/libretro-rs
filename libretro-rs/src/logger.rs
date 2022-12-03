@@ -1,6 +1,6 @@
 use c_utf8::*;
-use libretro_rs_sys::*;
 use libretro_rs_sys::retro_log_level::*;
+use libretro_rs_sys::*;
 
 /// Trait for types that provide safe access to [retro_log_printf_t].
 pub trait RetroLogInterface {
@@ -19,7 +19,10 @@ pub trait RetroLogger {
   fn error(&mut self, message: &CUtf8);
 }
 
-impl <T> RetroLogger for T where T: RetroLogInterface {
+impl<T> RetroLogger for T
+where
+  T: RetroLogInterface,
+{
   fn debug(&mut self, message: &CUtf8) {
     self.log(RETRO_LOG_DEBUG, message);
   }
@@ -68,7 +71,7 @@ impl RetroLogInterface for StderrLogger {
       RETRO_LOG_INFO => "INFO",
       RETRO_LOG_WARN => "WARN",
       RETRO_LOG_ERROR => "ERROR",
-      _ => return
+      _ => return,
     };
     eprintln!("[libretro {}] {}", label, message.as_str());
   }
@@ -78,36 +81,57 @@ impl RetroLogInterface for StderrLogger {
 #[derive(Clone, Copy)]
 pub struct FallbackLogger<T> {
   callback: fn(Option<&mut T>, retro_log_level, &CUtf8),
-  logger: Option<T>
+  logger: Option<T>,
 }
 
-impl <T> FallbackLogger<T> where T: RetroLogInterface {
+impl<T> FallbackLogger<T>
+where
+  T: RetroLogInterface,
+{
   pub fn new(logger: Option<T>) -> Self {
     match logger {
-      Some(_) => Self { callback: log_to_logger, logger },
-      None => Self { callback: log_to_stderr, logger },
+      Some(_) => Self {
+        callback: log_to_logger,
+        logger,
+      },
+      None => Self {
+        callback: log_to_stderr,
+        logger,
+      },
     }
   }
 }
 
-impl <T> From<Option<T>> for FallbackLogger<T> where T: RetroLogInterface {
+impl<T> From<Option<T>> for FallbackLogger<T>
+where
+  T: RetroLogInterface,
+{
   fn from(logger: Option<T>) -> Self {
     FallbackLogger::new(logger)
   }
 }
 
-impl <T> RetroLogInterface for FallbackLogger<T> where T: RetroLogInterface {
+impl<T> RetroLogInterface for FallbackLogger<T>
+where
+  T: RetroLogInterface,
+{
   fn log(&mut self, level: retro_log_level, message: &CUtf8) {
     (self.callback)(self.logger.as_mut(), level, message);
   }
 }
 
-fn log_to_logger<T>(cb: Option<&mut T>, level: retro_log_level, msg: &CUtf8) where T: RetroLogInterface {
+fn log_to_logger<T>(cb: Option<&mut T>, level: retro_log_level, msg: &CUtf8)
+where
+  T: RetroLogInterface,
+{
   // Safety: cb was checked in new
   unsafe { cb.unwrap_unchecked() }.log(level, msg);
 }
 
-fn log_to_stderr<T>(_cb: Option<&mut T>, level: retro_log_level, msg: &CUtf8) where T: RetroLogInterface {
+fn log_to_stderr<T>(_cb: Option<&mut T>, level: retro_log_level, msg: &CUtf8)
+where
+  T: RetroLogInterface,
+{
   StderrLogger.log(level, msg);
 }
 

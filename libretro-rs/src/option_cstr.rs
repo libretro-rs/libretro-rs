@@ -7,7 +7,7 @@ use core::ops::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct OptionCStr<'a>(pub Option<&'a CStr>);
 
-impl <'a> OptionCStr<'a> {
+impl<'a> OptionCStr<'a> {
   /// Maps null pointers to [None]; otherwise applies [CStr::from_ptr].
   /// # Examples
   /// ```
@@ -55,13 +55,13 @@ impl <'a> OptionCStr<'a> {
   }
 }
 
-impl <'a> From<Option<&'a CStr>> for OptionCStr<'a> {
+impl<'a> From<Option<&'a CStr>> for OptionCStr<'a> {
   fn from(c_str: Option<&'a CStr>) -> Self {
     Self(c_str)
   }
 }
 
-impl <'a> Deref for OptionCStr<'a> {
+impl<'a> Deref for OptionCStr<'a> {
   type Target = Option<&'a CStr>;
 
   fn deref(&self) -> &Self::Target {

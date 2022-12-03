@@ -5,10 +5,13 @@ pub enum RetroMemoryType<T> {
   RTC,
   SystemRam,
   VideoRam,
-  Subsystem(T)
+  Subsystem(T),
 }
 
-impl <T> From<RetroMemoryType<T>> for u16 where T: Into<u8> {
+impl<T> From<RetroMemoryType<T>> for u16
+where
+  T: Into<u8>,
+{
   /// Converts the standard memory types back into their constants, and
   /// left-shifts subsystem memory types to the upper 8 bits as recommended
   /// by the libretro API to avoid conflicts with future memory types.
@@ -19,12 +22,15 @@ impl <T> From<RetroMemoryType<T>> for u16 where T: Into<u8> {
       RTC => 1,
       SystemRam => 2,
       VideoRam => 3,
-      Subsystem(subsystem_type) => (subsystem_type.into() as u16) << 8
+      Subsystem(subsystem_type) => (subsystem_type.into() as u16) << 8,
     }
   }
 }
 
-impl <T> TryFrom<u16> for RetroMemoryType<T> where T: TryFrom<u8> {
+impl<T> TryFrom<u16> for RetroMemoryType<T>
+where
+  T: TryFrom<u8>,
+{
   type Error = &'static str;
 
   /// Attempts to convert a [u16] into a known [RetroMemoryType].
@@ -35,7 +41,7 @@ impl <T> TryFrom<u16> for RetroMemoryType<T> where T: TryFrom<u8> {
       1 => Ok(RTC),
       2 => Ok(SystemRam),
       3 => Ok(VideoRam),
-      _ =>
+      _ => {
         if mem_type < 256 {
           Err("Unknown standard memory type")
         } else {
@@ -43,6 +49,7 @@ impl <T> TryFrom<u16> for RetroMemoryType<T> where T: TryFrom<u8> {
             .map(|mem_type| Subsystem(mem_type))
             .map_err(|_| "Unknown subsystem memory type")
         }
+      }
     }
   }
 }

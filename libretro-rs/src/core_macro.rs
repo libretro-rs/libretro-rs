@@ -4,8 +4,8 @@ macro_rules! libretro_core {
     #[doc(hidden)]
     mod __libretro_rs_gen {
       use super::*;
-      use core::ffi::*;
       use core::ffi::c_char;
+      use core::ffi::*;
       use libretro_rs::sys::*;
       use libretro_rs::*;
 

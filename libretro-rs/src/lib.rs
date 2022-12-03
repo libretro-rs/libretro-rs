@@ -1,7 +1,7 @@
 pub use libretro_rs_sys as sys;
 
-pub mod core_macro;
 mod av_info;
+pub mod core_macro;
 mod environment;
 mod extensions;
 mod logger;
@@ -9,8 +9,8 @@ mod memory;
 mod option_cstr;
 mod system_info;
 
-pub use c_utf8;
 pub use av_info::*;
+pub use c_utf8;
 pub use environment::*;
 pub use extensions::*;
 pub use logger::*;
@@ -20,10 +20,10 @@ pub use system_info::*;
 
 pub use RetroLoadGameResult::*;
 
+use c_utf8::CUtf8;
 use core::ffi::*;
 use core::ops::*;
 use sys::*;
-use c_utf8::CUtf8;
 
 // u32 is a safe alias for c_uint since libretro.h defines RETRO_ENVIRONMENT_EXPERIMENTAL as 0x10000;
 // therefore command values are always larger than a u16, and no platform uses 64-bit c_uint.
@@ -97,13 +97,21 @@ pub trait RetroCore: Sized {
   /// required for the core to function properly.
   fn load_game(env: &mut impl LoadGameEnvironment, game: RetroGame) -> RetroLoadGameResult<Self>;
 
-  fn load_game_special(env: &mut impl LoadGameSpecialEnvironment, game_type: Self::SpecialGameType, info: RetroGame) -> RetroLoadGameResult<Self> {
+  fn load_game_special(
+    env: &mut impl LoadGameSpecialEnvironment,
+    game_type: Self::SpecialGameType,
+    info: RetroGame,
+  ) -> RetroLoadGameResult<Self> {
     Failure
   }
 
   fn unload_game(&mut self, env: &mut impl UnloadGameEnvironment) {}
 
-  fn get_memory_data(&mut self, env: &mut impl GetMemoryDataEnvironment, id: RetroMemoryType<Self::SubsystemMemoryType>) -> Option<&mut [u8]> {
+  fn get_memory_data(
+    &mut self,
+    env: &mut impl GetMemoryDataEnvironment,
+    id: RetroMemoryType<Self::SubsystemMemoryType>,
+  ) -> Option<&mut [u8]> {
     None
   }
 
@@ -193,7 +201,7 @@ impl<'a> From<Option<&retro_game_info>> for RetroGame<'a> {
   fn from(info: Option<&retro_game_info>) -> Self {
     match info {
       None => RetroGame::None { meta: OptionCStr(None) },
-      Some(info) => RetroGame::from(info)
+      Some(info) => RetroGame::from(info),
     }
   }
 }
@@ -264,38 +272,50 @@ pub enum RetroLoadGameResult<T> {
   Success(T),
 }
 
-impl <T> From<RetroLoadGameResult<T>> for Option<T> where T: RetroCore {
+impl<T> From<RetroLoadGameResult<T>> for Option<T>
+where
+  T: RetroCore,
+{
   fn from(result: RetroLoadGameResult<T>) -> Self {
     match result {
       Failure => None,
-      Success(core) => Some(core)
+      Success(core) => Some(core),
     }
   }
 }
 
-impl <T> From<Option<T>> for RetroLoadGameResult<T> where T: RetroCore {
+impl<T> From<Option<T>> for RetroLoadGameResult<T>
+where
+  T: RetroCore,
+{
   fn from(option: Option<T>) -> Self {
     match option {
       None => Failure,
-      Some(core) => Success(core)
+      Some(core) => Success(core),
     }
   }
 }
 
-impl <T, E> From<Result<T, E>> for RetroLoadGameResult<T> where T: RetroCore {
+impl<T, E> From<Result<T, E>> for RetroLoadGameResult<T>
+where
+  T: RetroCore,
+{
   fn from(result: Result<T, E>) -> Self {
     match result {
       Err(_) => Failure,
-      Ok(core) => Success(core)
+      Ok(core) => Success(core),
     }
   }
 }
 
-impl <T> From<RetroLoadGameResult<T>> for Result<T, ()> where T: RetroCore {
+impl<T> From<RetroLoadGameResult<T>> for Result<T, ()>
+where
+  T: RetroCore,
+{
   fn from(result: RetroLoadGameResult<T>) -> Self {
     match result {
       Failure => Err(()),
-      Success(core) => Ok(core)
+      Success(core) => Ok(core),
     }
   }
 }
@@ -386,9 +406,7 @@ impl RetroRuntime {
     let device = RETRO_DEVICE_JOYPAD;
     let index = 0;
     let id = btn.into();
-    unsafe {
-      cb(port, device, index, id) != 0
-    }
+    unsafe { cb(port, device, index, id) != 0 }
   }
 }
 
@@ -411,7 +429,9 @@ impl<T: RetroCore> RetroInstance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_get_system_av_info` API call.
   pub fn on_get_system_av_info(&self, info: &mut retro_system_av_info) {
-    let system = self.system.as_ref()
+    let system = self
+      .system
+      .as_ref()
       .expect("`retro_get_system_av_info` called without a successful `retro_load_game` call. The frontend is not compliant");
     *info = system.get_system_av_info(&mut self.environment()).into();
   }
@@ -560,8 +580,7 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
   pub fn on_load_game_special(&mut self, game_type: c_uint, info: &retro_game_info, _num_info: usize) -> bool {
     let mut env = self.environment();
-    let game_type = u8::try_from(game_type)
-      .expect("on_load_game_special() received a game_type outside the expected range.");
+    let game_type = u8::try_from(game_type).expect("on_load_game_special() received a game_type outside the expected range.");
     if let Ok(game_type) = T::SpecialGameType::try_from(game_type) {
       if let Success(core) = T::load_game_special(&mut env, game_type, info.into()) {
         self.system = Some(core);
@@ -587,13 +606,12 @@ impl<T: RetroCore> RetroInstance<T> {
   pub fn on_get_memory_data(&mut self, id: c_uint) -> *mut () {
     let mut env = self.environment();
     self.core_mut(|core| {
-      let id = u16::try_from(id)
-        .expect("on_get_memory_data received an id outside of the expected range.");
+      let id = u16::try_from(id).expect("on_get_memory_data received an id outside of the expected range.");
       if let Ok(id) = RetroMemoryType::try_from(id) {
-          if let Some(data) = core.get_memory_data(&mut env, id) {
-            // TODO: is there a way to maintain lifetimes here?
-            return data.as_mut_ptr() as *mut ()
-          }
+        if let Some(data) = core.get_memory_data(&mut env, id) {
+          // TODO: is there a way to maintain lifetimes here?
+          return data.as_mut_ptr() as *mut ();
+        }
       }
       core::ptr::null_mut()
     })
@@ -602,8 +620,7 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
   pub fn on_get_memory_size(&mut self, id: c_uint) -> usize {
     let mut env = self.environment();
-    let id = u16::try_from(id)
-      .expect("on_get_memory_size() received an id outside of the expected range.");
+    let id = u16::try_from(id).expect("on_get_memory_size() received an id outside of the expected range.");
     if let Ok(id) = RetroMemoryType::try_from(id) {
       self.core_mut(|core| core.get_memory_size(&mut env, id))
     } else {
