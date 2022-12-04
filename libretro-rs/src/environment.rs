@@ -293,7 +293,7 @@ pub trait GetMemorySizeEnvironment: RetroEnvironment {}
 impl<T> GetMemorySizeEnvironment for T where T: RetroEnvironment {}
 
 #[repr(u32)]
-#[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ScreenRotation {
   #[default]
   ZeroDegrees = 0,
@@ -303,7 +303,7 @@ pub enum ScreenRotation {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct RetroMessage(retro_message);
 
 impl RetroMessage {

@@ -120,8 +120,10 @@ pub trait RetroCore: Sized {
   }
 }
 
-#[derive(Debug)]
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RetroDevice {
+  #[default]
   None = 0,
   Joypad = 1,
   Mouse = 2,
@@ -224,7 +226,10 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
   }
 }
 
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RetroJoypadButton {
+  #[default]
   B = 0,
   Y = 1,
   Select = 2,
@@ -321,9 +326,11 @@ where
 }
 
 /// Represents the set of regions supported by `libretro`.
-#[derive(Clone, Copy)]
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RetroRegion {
   /// A 30 frames/second (60 fields/second) video system.
+  #[default]
   NTSC = 0,
   /// A 25 frames/second (50 fields/second) video system.
   PAL = 1,
@@ -338,8 +345,8 @@ impl From<RetroRegion> for c_uint {
   }
 }
 
-#[repr(i32)]
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RetroPixelFormat {
   #[default]
   RGB1555 = 0,
