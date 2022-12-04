@@ -3,7 +3,7 @@ extern crate bindgen;
 use std::env;
 use std::path::PathBuf;
 
-const LIBRETRO_HEADER_FILE: &'static str = "include/libretro.h";
+const LIBRETRO_HEADER_FILE: &str = "include/libretro.h";
 
 fn main() {
   println!("cargo:rerun-if-changed={}", LIBRETRO_HEADER_FILE);

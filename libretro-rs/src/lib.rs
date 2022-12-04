@@ -562,15 +562,13 @@ impl<T: RetroCore> RetroInstance<T> {
   /// See [CStr::from_ptr].
   pub unsafe fn on_cheat_set(&mut self, index: c_uint, enabled: bool, code: *const c_char) {
     let index = index as u32;
-    let code = CStr::from_ptr(code)
-      .to_str()
-      .expect("`code` contains invalid data");
+    let code = CStr::from_ptr(code).to_str().expect("`code` contains invalid data");
     let mut env = self.environment();
     self.core_mut(|core| core.cheat_set(&mut env, index, enabled, code))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
-  /// 
+  ///
   /// # Safety
   /// `game` must remain valid until `on_unload_game` is called.
   pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
