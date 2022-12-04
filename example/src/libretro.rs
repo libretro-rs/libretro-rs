@@ -65,35 +65,33 @@ fn key_to_retro_button(key: keyboard::Key) -> RetroJoypadButton {
 }
 
 impl RetroCore for LibretroCore {
+  type SpecialGameType = ();
+  type SubsystemMemoryType = ();
+
   fn get_system_info() -> RetroSystemInfo {
     RetroSystemInfo::new("chip8.rs", env!("CARGO_PKG_VERSION"))
   }
 
   fn load_game(_env: &mut RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
-    const WINDOW_SCALE: u32 = 8;
-    const WINDOW_WIDTH: u32 = WINDOW_SCALE * display::WIDTH as u32;
-    const WINDOW_HEIGHT: u32 = WINDOW_SCALE * display::HEIGHT as u32;
-
     match game {
       RetroGame::Data { data, .. } => {
-        let region = RetroRegion::NTSC;
-        let audio = RetroAudioInfo::new(44100.0);
-        let video = RetroVideoInfo::new(60.0, WINDOW_WIDTH, WINDOW_HEIGHT).with_pixel_format(RetroPixelFormat::XRGB8888);
         let core = LibretroCore {
           cpu: cpu::Cpu::new(&data),
           audio_buffer: [0; timer::AUDIO_BUFFER_SIZE * 2],
           frame_buffer: [0; display::AREA * std::mem::size_of::<i32>()],
         };
-
-        RetroLoadGameResult::Success {
-          region,
-          audio,
-          video,
-          core,
-        }
+        RetroLoadGameResult::Success(core)
       }
       _ => RetroLoadGameResult::Failure,
     }
+  }
+
+  fn get_system_av_info(&self, env: &mut RetroEnvironment) -> RetroSystemAVInfo {
+    const WINDOW_SCALE: u16 = 8;
+    const WINDOW_WIDTH: u16 = WINDOW_SCALE * display::WIDTH as u16;
+    const WINDOW_HEIGHT: u16 = WINDOW_SCALE * display::HEIGHT as u16;
+    env.set_pixel_format(RetroPixelFormat::XRGB8888);
+    RetroSystemAVInfo::default_timings(RetroGameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
   }
 
   fn reset(&mut self, _env: &mut RetroEnvironment) {

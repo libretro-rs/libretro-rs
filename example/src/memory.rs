@@ -18,7 +18,7 @@ impl Memory {
   pub fn new(game: &[u8]) -> Memory {
     let mut data = [0; MEMORY_SIZE];
     data[0x000..0x000 + FONT.len()].copy_from_slice(&FONT);
-    data[0x200..0x200 + game.len()].copy_from_slice(&game);
+    data[0x200..0x200 + game.len()].copy_from_slice(game);
 
     Memory { data }
   }
