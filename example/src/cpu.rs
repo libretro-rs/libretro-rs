@@ -182,14 +182,14 @@ impl Cpu {
       // 8xy4 - ADD Vx, Vy
       (0x8, _, _, 0x4) => {
         let (result, overflow) = self.get(code.x()).overflowing_add(self.get(code.y()));
-        self.set(code.f(), if overflow { 1 } else { 0 });
+        self.set(code.f(), u8::from(overflow));
         self.set(code.x(), result);
       }
 
       // 8xy5 - SUB Vx, Vy
       (0x8, _, _, 0x5) => {
         let (result, overflow) = self.get(code.x()).overflowing_sub(self.get(code.y()));
-        self.set(code.f(), if overflow { 1 } else { 0 });
+        self.set(code.f(), u8::from(overflow));
         self.set(code.x(), result)
       }
 
@@ -202,7 +202,7 @@ impl Cpu {
       // 8xy7 - SUBN Vx, Vy
       (0x8, _, _, 0x7) => {
         let (result, overflow) = self.get(code.y()).overflowing_sub(self.get(code.x()));
-        self.set(code.f(), if overflow { 1 } else { 0 });
+        self.set(code.f(), u8::from(overflow));
         self.set(code.x(), result);
       }
 
@@ -242,7 +242,7 @@ impl Cpu {
         let vy = self.get(code.y()) as usize;
         let collisions = self.display.drw(vx, vy, &sprite_data);
 
-        self.set(code.f(), if collisions { 1 } else { 0 });
+        self.set(code.f(), u8::from(collisions));
       }
 
       // Ex9E - SKP Vx
