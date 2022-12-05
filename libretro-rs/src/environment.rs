@@ -2,37 +2,69 @@ use crate::*;
 use core::ffi::*;
 use libretro_rs_sys::*;
 
-impl RetroEnvironment for EnvironmentCallback {
-  unsafe fn get_raw<T>(&self, key: u32, data: &mut T) -> bool
-  where
-    T: Copy,
-  {
-    self(key, data as *mut _ as *mut c_void)
+/// Marker trait for types that are valid arguments to the environment callback.
+///
+/// Any type implementing this trait must be FFI-safe. Structs should be `#[repr(C)]` or a
+/// `#[repr(transparent)]` newtype. Numeric enums should have the appropriate primitive
+/// representation, which is typically either `#[repr(u32)]` for `const unsigned` arguments or
+/// `#[repr(i32)]` for `const enum` arguments.
+///
+/// Care must still be taken when calling any of the generic unsafe `[RetroEnvironment]` methods to
+/// ensure the type used is appropriate for the environment command, as specified in `libretro.h`.
+pub trait RetroEnvironmentData {}
+impl RetroEnvironmentData for bool {}
+impl RetroEnvironmentData for Option<&c_char> {}
+impl RetroEnvironmentData for c_void {}
+impl RetroEnvironmentData for retro_log_callback {}
+impl RetroEnvironmentData for RetroMessage {}
+impl RetroEnvironmentData for RetroPixelFormat {}
+impl RetroEnvironmentData for RetroGameGeometry {}
+impl RetroEnvironmentData for ScreenRotation {}
+impl RetroEnvironmentData for u32 {}
+
+/// Rust interface to the environment callback, [retro_environment_t].
+///
+/// # Safety
+/// Using the environment callback in a way that violates the libretro specification is unsafe.
+pub unsafe trait RetroEnvironmentAdapter {
+  /// Calls the environment callback with an immutable reference.
+  ///
+  /// # Safety
+  /// The environment command must not mutate data.
+  /// Using the environment callback in a way that violates the libretro specification is unsafe.
+  unsafe fn call(&self, cmd: impl Into<u32>, data: Option<&impl RetroEnvironmentData>) -> bool;
+
+  /// Calls the environment callback with a mutable reference.
+  ///
+  /// # Safety
+  /// The environment command must not mutate data.
+  /// Using the environment callback in a way that violates the libretro specification is unsafe.
+  unsafe fn call_mut(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool;
+}
+
+pub type EnvironmentCallback = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
+
+unsafe impl RetroEnvironmentAdapter for EnvironmentCallback {
+  unsafe fn call(&self, cmd: impl Into<u32>, data: Option<&impl RetroEnvironmentData>) -> bool {
+    let ptr = data.map_or_else(core::ptr::null_mut, |t| t as *const _ as *mut c_void);
+    self(cmd.into(), ptr)
   }
 
-  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool
-  where
-    T: Copy,
-  {
-    self(key, data as *const _ as *mut c_void)
+  unsafe fn call_mut(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool {
+    let ptr = data as *mut _ as *mut c_void;
+    self(cmd.into(), ptr)
   }
 }
 
 /// A [RetroEnvironment] that doesn't implement any commands. Useful for testing.
 pub struct NullEnvironment;
 
-impl RetroEnvironment for NullEnvironment {
-  unsafe fn get_raw<T>(&self, _key: u32, _data: &mut T) -> bool
-  where
-    T: Copy,
-  {
+unsafe impl RetroEnvironmentAdapter for NullEnvironment {
+  unsafe fn call(&self, _cmd: impl Into<u32>, _data: Option<&impl RetroEnvironmentData>) -> bool {
     false
   }
 
-  unsafe fn set_raw<T>(&mut self, _key: u32, _data: &T) -> bool
-  where
-    T: Copy,
-  {
+  unsafe fn call_mut(&self, _cmd: impl Into<u32>, _data: &mut impl RetroEnvironmentData) -> bool {
     false
   }
 }
@@ -47,21 +79,19 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn get_raw<T>(&self, key: u32, data: &mut T) -> bool
-  where
-    T: Copy;
+  unsafe fn get_raw(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool;
 
   /// Calls [RetroEnvironment::get_raw] with `T::default()`.
   /// Equivalent to `self.get_option_raw(key).unwrap_or_default()`.
   ///
   /// # Safety
   /// See [RetroEnvironment::get_raw].
-  unsafe fn get_or_default_raw<T>(&self, key: u32) -> T
+  unsafe fn get_or_default_raw<T>(&self, cmd: impl Into<u32>) -> T
   where
-    T: Copy + Default,
+    T: Default + RetroEnvironmentData,
   {
     let mut result = T::default();
-    self.get_raw(key, &mut result);
+    self.get_raw(cmd, &mut result);
     result
   }
 
@@ -70,12 +100,12 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn get_option_raw<T>(&self, key: u32) -> Option<T>
+  unsafe fn get_option_raw<T>(&self, cmd: impl Into<u32>) -> Option<T>
   where
-    T: Copy + Default,
+    T: Default + RetroEnvironmentData,
   {
     let mut data = T::default();
-    if self.get_raw(key, &mut data) {
+    if self.get_raw(cmd, &mut data) {
       Some(data)
     } else {
       None
@@ -86,9 +116,9 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// See [CStr::from_ptr].
-  unsafe fn get_c_str_raw(&self, key: u32) -> OptionCStr {
+  unsafe fn get_c_str_raw(&self, cmd: impl Into<u32>) -> OptionCStr {
     self
-      .get_option_raw(key)
+      .get_option_raw(cmd)
       .flatten()
       .map(|ptr: &c_char| CStr::from_ptr(ptr))
       .into()
@@ -100,35 +130,21 @@ pub trait RetroEnvironment: Sized {
   /// The environment command **must not** modify `data`.
   ///
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_raw<T>(&mut self, key: u32, data: &T) -> bool
-  where
-    T: Copy;
+  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   /// The command may mutate `data`.
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_mut_raw<T>(&mut self, key: u32, data: &mut T) -> bool
-  where
-    T: Copy,
-  {
-    // Internally, get_raw and set_mut_raw are the same operation;
-    // they both have the potential to mutate data. The only difference between
-    // them is whether higher-level methods use &self or &mut self.
-    self.get_raw(key, data)
-  }
+  unsafe fn set_mut_raw(&mut self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool;
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
   /// Equivalent to [RetroEnvironment::set_raw] without `data`.
   ///
   /// # Safety
   /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn cmd_raw(&mut self, key: u32) -> bool {
-    // Safety: A command that takes no data is expecting a *mut c_void pointer,
-    // which can't be dereferenced.
-    self.set_raw(key, &())
-  }
+  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool;
 
   /// Sets screen rotation of graphics.
   fn set_rotation(&mut self, rotation: ScreenRotation) -> bool {
@@ -198,6 +214,27 @@ pub trait RetroEnvironment: Sized {
   }
 }
 
+impl<C> RetroEnvironment for C
+where
+  C: RetroEnvironmentAdapter,
+{
+  unsafe fn get_raw(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool {
+    self.call_mut(cmd, data)
+  }
+
+  unsafe fn set_mut_raw(&mut self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool {
+    self.call_mut(cmd, data)
+  }
+
+  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool {
+    self.call(cmd, Some(data))
+  }
+
+  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool {
+    self.call(cmd, Option::<&c_void>::None)
+  }
+}
+
 pub trait SetEnvironmentEnvironment: RetroEnvironment {
   fn set_support_no_game(&mut self, data: bool) -> bool {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &data) }
@@ -221,8 +258,7 @@ pub trait RunEnvironment: RetroEnvironment {
   }
 
   fn set_geometry(&mut self, geometry: RetroGameGeometry) -> bool {
-    let mut data: retro_game_geometry = geometry.into();
-    unsafe { self.set_mut_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &mut data) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry) }
   }
 }
 impl<T> RunEnvironment for T where T: RetroEnvironment {}

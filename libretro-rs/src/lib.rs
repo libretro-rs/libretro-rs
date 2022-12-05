@@ -25,10 +25,6 @@ use core::ffi::*;
 use core::ops::*;
 use sys::*;
 
-// u32 is a safe alias for c_uint since libretro.h defines RETRO_ENVIRONMENT_EXPERIMENTAL as 0x10000;
-// therefore command values are always larger than a u16, and no platform uses 64-bit c_uint.
-pub type EnvironmentCallback = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
-
 pub struct NotApplicable();
 
 impl TryFrom<u8> for NotApplicable {
@@ -345,6 +341,7 @@ impl From<RetroRegion> for c_uint {
   }
 }
 
+#[repr(i32)]
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum RetroPixelFormat {
