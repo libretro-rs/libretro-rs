@@ -349,7 +349,7 @@ pub enum RetroJoypadButton {
   L3 = 14,
   R3 = 15,
   #[cfg(experimental)]
-  MASK = 256,
+  Mask = 256,
 }
 
 impl From<RetroJoypadButton> for u32 {

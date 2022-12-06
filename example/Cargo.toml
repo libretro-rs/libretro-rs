@@ -5,7 +5,7 @@ authors = ["Adam Becker <apbecker@protonmail.com>"]
 edition = "2021"
 
 [dependencies]
-libretro-rs = { path = "../libretro-rs" }
+libretro-rs = { path = "../libretro-rs", features = ["experimental"] }
 
 [lib]
 crate-type = ["cdylib"]
