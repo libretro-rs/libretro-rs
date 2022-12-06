@@ -14,60 +14,18 @@ use libretro_rs_sys::*;
 pub trait RetroEnvironmentData {}
 impl RetroEnvironmentData for bool {}
 impl RetroEnvironmentData for Option<&c_char> {}
-impl RetroEnvironmentData for c_void {}
 impl RetroEnvironmentData for retro_log_callback {}
 impl RetroEnvironmentData for RetroMessage {}
 impl RetroEnvironmentData for RetroPixelFormat {}
 impl RetroEnvironmentData for RetroGameGeometry {}
 impl RetroEnvironmentData for ScreenRotation {}
 impl RetroEnvironmentData for u32 {}
-
-/// Rust interface to the environment callback, [retro_environment_t].
-///
-/// # Safety
-/// Using the environment callback in a way that violates the libretro specification is unsafe.
-pub unsafe trait RetroEnvironmentAdapter {
-  /// Calls the environment callback with an immutable reference.
-  ///
-  /// # Safety
-  /// The environment command must not mutate data.
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn call(&self, cmd: impl Into<u32>, data: Option<&impl RetroEnvironmentData>) -> bool;
-
-  /// Calls the environment callback with a mutable reference.
-  ///
-  /// # Safety
-  /// The environment command must not mutate data.
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn call_mut(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool;
-}
+impl<T> RetroEnvironmentData for Option<T> where T: RetroEnvironmentData {}
 
 pub type EnvironmentCallback = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
 
-unsafe impl RetroEnvironmentAdapter for EnvironmentCallback {
-  unsafe fn call(&self, cmd: impl Into<u32>, data: Option<&impl RetroEnvironmentData>) -> bool {
-    let ptr = data.map_or_else(core::ptr::null_mut, |t| t as *const _ as *mut c_void);
-    self(cmd.into(), ptr)
-  }
-
-  unsafe fn call_mut(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool {
-    let ptr = data as *mut _ as *mut c_void;
-    self(cmd.into(), ptr)
-  }
-}
-
 /// A [RetroEnvironment] that doesn't implement any commands. Useful for testing.
 pub struct NullEnvironment;
-
-unsafe impl RetroEnvironmentAdapter for NullEnvironment {
-  unsafe fn call(&self, _cmd: impl Into<u32>, _data: Option<&impl RetroEnvironmentData>) -> bool {
-    false
-  }
-
-  unsafe fn call_mut(&self, _cmd: impl Into<u32>, _data: &mut impl RetroEnvironmentData) -> bool {
-    false
-  }
-}
 
 /// Exposes the [retro_environment_t] callback in an idiomatic fashion.
 /// Each of the `RETRO_ENVIRONMENT_*` keys will eventually have a corresponding method here.
@@ -76,75 +34,69 @@ unsafe impl RetroEnvironmentAdapter for NullEnvironment {
 /// manually with the various `*_raw` methods.
 pub trait RetroEnvironment: Sized {
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
+  /// Returns `Some(T)` iff the command succeeds.
   ///
   /// # Safety
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn get_raw(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool;
-
-  /// Calls [RetroEnvironment::get_raw] with `T::default()`.
-  /// Equivalent to `self.get_option_raw(key).unwrap_or_default()`.
-  ///
-  /// # Safety
-  /// See [RetroEnvironment::get_raw].
-  unsafe fn get_or_default_raw<T>(&self, cmd: impl Into<u32>) -> T
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
+  unsafe fn get_raw<T>(&self, cmd: impl Into<u32>) -> Option<T>
   where
-    T: Default + RetroEnvironmentData,
-  {
-    let mut result = T::default();
-    self.get_raw(cmd, &mut result);
-    result
-  }
+    T: Default + RetroEnvironmentData;
 
-  /// Calls [RetroEnvironment::get_raw] with [T::default]; returns `Some(T)` iff `get_raw` returns
-  /// `true`.
+  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
+  /// Returns `Some(T)` iff the command succeeds.
+  ///
+  /// `data` is transformed into a `T` value prior to calling the callback.
   ///
   /// # Safety
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn get_option_raw<T>(&self, cmd: impl Into<u32>) -> Option<T>
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
+  unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
   where
-    T: Default + RetroEnvironmentData,
-  {
-    let mut data = T::default();
-    if self.get_raw(cmd, &mut data) {
-      Some(data)
-    } else {
-      None
-    }
-  }
-
-  /// Gets a `*const c_char` from [RetroEnvironment::get_raw] and converts it into a [CStr].
-  ///
-  /// # Safety
-  /// See [CStr::from_ptr].
-  unsafe fn get_c_str_raw(&self, cmd: impl Into<u32>) -> OptionCStr {
-    self
-      .get_option_raw(cmd)
-      .flatten()
-      .map(|ptr: &c_char| CStr::from_ptr(ptr))
-      .into()
-  }
+    T: RetroEnvironmentData;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   ///
   /// # Safety
   /// The environment command **must not** modify `data`.
   ///
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
   unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
-  /// The command may mutate `data`.
+  /// Returns `Some(T)` iff the command succeeds.
+  ///
+  /// `data` is transformed into a `T` value prior to calling the callback.
   ///
   /// # Safety
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
-  unsafe fn set_mut_raw(&mut self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool;
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
+  unsafe fn parameterized_set_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
+  where
+    T: RetroEnvironmentData;
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
-  /// Equivalent to [RetroEnvironment::set_raw] without `data`.
   ///
   /// # Safety
-  /// Using the environment callback in a way that violates the libretro specification is unsafe.
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
   unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool;
+
+  /// Gets an `Option<&c_char>` from [RetroEnvironment::get_raw] and converts it into a [CStr].
+  ///
+  /// # Safety
+  /// The pointer returned by the command must be a valid argument to [CStr::from_ptr].
+  ///
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
+  unsafe fn get_c_str_raw(&self, cmd: impl Into<u32>) -> OptionCStr {
+    self
+      .get_raw::<Option<&c_char>>(cmd)
+      .flatten()
+      .map(|x| CStr::from_ptr(x))
+      .into()
+  }
 
   /// Sets screen rotation of graphics.
   fn set_rotation(&mut self, rotation: ScreenRotation) -> bool {
@@ -160,7 +112,7 @@ pub trait RetroEnvironment: Sized {
 
   /// Boolean value indicating whether or not frontend supports frame duping.
   fn get_can_dupe(&self) -> bool {
-    unsafe { self.get_or_default_raw(RETRO_ENVIRONMENT_GET_CAN_DUPE) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_CAN_DUPE).unwrap_or(false) }
   }
 
   /// Sets a message to be displayed in implementation-specific manner for a
@@ -208,30 +160,9 @@ pub trait RetroEnvironment: Sized {
   /// information in a more suitable way. If this interface is not used, libretro cores should log
   /// to [std::io::Stderr] (via [eprintln], [StderrLogger] or [FallbackLogger]) as desired.
   fn get_log_interface(&self) -> Option<PlatformLogger> {
-    unsafe { self.get_option_raw(RETRO_ENVIRONMENT_GET_LOG_INTERFACE) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_LOG_INTERFACE) }
       .and_then(|cb: retro_log_callback| cb.log)
       .map(PlatformLogger::new)
-  }
-}
-
-impl<C> RetroEnvironment for C
-where
-  C: RetroEnvironmentAdapter,
-{
-  unsafe fn get_raw(&self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool {
-    self.call_mut(cmd, data)
-  }
-
-  unsafe fn set_mut_raw(&mut self, cmd: impl Into<u32>, data: &mut impl RetroEnvironmentData) -> bool {
-    self.call_mut(cmd, data)
-  }
-
-  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool {
-    self.call(cmd, Some(data))
-  }
-
-  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool {
-    self.call(cmd, Option::<&c_void>::None)
   }
 }
 
@@ -327,6 +258,76 @@ impl<T> GetMemoryDataEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetMemorySizeEnvironment: RetroEnvironment {}
 impl<T> GetMemorySizeEnvironment for T where T: RetroEnvironment {}
+
+unsafe fn get_option_from_callback<T>(cb: &EnvironmentCallback, cmd: impl Into<u32>, mut data: T) -> Option<T> {
+  if cb(cmd.into(), &mut data as *mut _ as *mut c_void) {
+    Some(data)
+  } else {
+    None
+  }
+}
+
+impl RetroEnvironment for EnvironmentCallback {
+  unsafe fn get_raw<T>(&self, cmd: impl Into<u32>) -> Option<T>
+  where
+    T: Default + RetroEnvironmentData,
+  {
+    get_option_from_callback(self, cmd.into(), T::default())
+  }
+
+  unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
+  where
+    T: RetroEnvironmentData,
+  {
+    get_option_from_callback(self, cmd, data.into())
+  }
+
+  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool {
+    self(cmd.into(), data as *const _ as *mut c_void)
+  }
+
+  unsafe fn parameterized_set_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
+  where
+    T: RetroEnvironmentData,
+  {
+    get_option_from_callback(self, cmd, data.into())
+  }
+
+  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool {
+    self(cmd.into(), core::ptr::null_mut())
+  }
+}
+
+impl RetroEnvironment for NullEnvironment {
+  unsafe fn get_raw<T>(&self, _cmd: impl Into<u32>) -> Option<T>
+  where
+    T: Default + RetroEnvironmentData,
+  {
+    None
+  }
+
+  unsafe fn parameterized_get_raw<T>(&self, _cmd: impl Into<u32>, _data: impl Into<T>) -> Option<T>
+  where
+    T: RetroEnvironmentData,
+  {
+    None
+  }
+
+  unsafe fn set_raw(&mut self, _cmd: impl Into<u32>, _data: &impl RetroEnvironmentData) -> bool {
+    false
+  }
+
+  unsafe fn parameterized_set_raw<T>(&mut self, _cmd: impl Into<u32>, _data: impl Into<T>) -> Option<T>
+  where
+    T: RetroEnvironmentData,
+  {
+    None
+  }
+
+  unsafe fn cmd_raw(&mut self, _cmd: impl Into<u32>) -> bool {
+    false
+  }
+}
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
