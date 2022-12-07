@@ -1,31 +1,13 @@
+mod callback_environment;
+mod convert;
+mod newtypes;
+mod null_environment;
+
 use crate::*;
-use core::ffi::*;
-use libretro_rs_sys::*;
-
-/// Marker trait for types that are valid arguments to the environment callback.
-///
-/// Any type implementing this trait must be FFI-safe. Structs should be `#[repr(C)]` or a
-/// `#[repr(transparent)]` newtype. Numeric enums should have the appropriate primitive
-/// representation, which is typically either `#[repr(u32)]` for `const unsigned` arguments or
-/// `#[repr(i32)]` for `const enum` arguments.
-///
-/// Care must still be taken when calling any of the generic unsafe `[RetroEnvironment]` methods to
-/// ensure the type used is appropriate for the environment command, as specified in `libretro.h`.
-pub trait RetroEnvironmentData {}
-impl RetroEnvironmentData for bool {}
-impl RetroEnvironmentData for Option<&c_char> {}
-impl RetroEnvironmentData for retro_log_callback {}
-impl RetroEnvironmentData for RetroMessage {}
-impl RetroEnvironmentData for RetroPixelFormat {}
-impl RetroEnvironmentData for RetroGameGeometry {}
-impl RetroEnvironmentData for ScreenRotation {}
-impl RetroEnvironmentData for u32 {}
-impl<T> RetroEnvironmentData for Option<T> where T: RetroEnvironmentData {}
-
-pub type EnvironmentCallback = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
-
-/// A [RetroEnvironment] that doesn't implement any commands. Useful for testing.
-pub struct NullEnvironment;
+pub use callback_environment::*;
+pub use convert::*;
+pub use newtypes::*;
+pub use null_environment::*;
 
 /// Exposes the [retro_environment_t] callback in an idiomatic fashion.
 /// Each of the `RETRO_ENVIRONMENT_*` keys will eventually have a corresponding method here.
@@ -39,9 +21,13 @@ pub trait RetroEnvironment: Sized {
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [RetroEnvironmentData] for more information about type requirements.
-  unsafe fn get_raw<T>(&self, cmd: impl Into<u32>) -> Option<T>
+  unsafe fn get_raw<T, U>(&self, cmd: impl Into<u32>) -> T
   where
-    T: Default + RetroEnvironmentData;
+    T: RetroEnvironmentResult<Source = U>,
+    U: Default + RetroEnvironmentData,
+  {
+    self.parameterized_get_raw(cmd, U::default())
+  }
 
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
   /// Returns `Some(T)` iff the command succeeds.
@@ -51,9 +37,9 @@ pub trait RetroEnvironment: Sized {
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [RetroEnvironmentData] for more information about type requirements.
-  unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
+  unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T::Source>) -> T
   where
-    T: RetroEnvironmentData;
+    T: RetroEnvironmentResult;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   ///
@@ -64,7 +50,17 @@ pub trait RetroEnvironment: Sized {
   /// See [RetroEnvironmentData] for more information about type requirements.
   unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool;
 
-  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
+  /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
+  /// Equivalent to [RetroEnvironment::set_raw] with `&()`.
+  ///
+  /// # Safety
+  /// See `libretro.h` for the requirements of environment commands.
+  /// See [RetroEnvironmentData] for more information about type requirements.
+  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool {
+    self.set_raw(cmd, &())
+  }
+
+  /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
   /// Returns `Some(T)` iff the command succeeds.
   ///
   /// `data` is transformed into a `T` value prior to calling the callback.
@@ -72,31 +68,9 @@ pub trait RetroEnvironment: Sized {
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [RetroEnvironmentData] for more information about type requirements.
-  unsafe fn parameterized_set_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
+  unsafe fn parameterized_cmd_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T::Source>) -> T
   where
-    T: RetroEnvironmentData;
-
-  /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
-  ///
-  /// # Safety
-  /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
-  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool;
-
-  /// Gets an `Option<&c_char>` from [RetroEnvironment::get_raw] and converts it into a [CStr].
-  ///
-  /// # Safety
-  /// The pointer returned by the command must be a valid argument to [CStr::from_ptr].
-  ///
-  /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
-  unsafe fn get_c_str_raw(&self, cmd: impl Into<u32>) -> OptionCStr {
-    self
-      .get_raw::<Option<&c_char>>(cmd)
-      .flatten()
-      .map(|x| CStr::from_ptr(x))
-      .into()
-  }
+    T: RetroEnvironmentResult;
 
   /// Sets screen rotation of graphics.
   fn set_rotation(&mut self, rotation: ScreenRotation) -> bool {
@@ -112,30 +86,30 @@ pub trait RetroEnvironment: Sized {
 
   /// Boolean value indicating whether or not frontend supports frame duping.
   fn get_can_dupe(&self) -> bool {
-    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_CAN_DUPE).unwrap_or(false) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_CAN_DUPE) }
   }
 
   /// Sets a message to be displayed in implementation-specific manner for a
   /// certain amount of 'frames'. Should not be used for trivial messages,
   /// which should simply be logged via [RetroEnvironment::get_log_interface]
   /// (or as a fallback, stderr).
-  fn set_message(&mut self, message: &RetroMessage) -> bool {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_MESSAGE, message) }
+  fn set_message(&mut self, message: impl Into<RetroMessage>) -> bool {
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_MESSAGE, &message.into()) }
   }
 
   /// Queries the path where the current libretro core resides.
-  fn get_libretro_path(&self) -> OptionCStr {
-    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
+  fn get_libretro_path(&self) -> Option<&CStr> {
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
   }
 
   /// Queries the path of the "core assets" directory.
-  fn get_core_assets_directory(&self) -> OptionCStr {
-    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
+  fn get_core_assets_directory(&self) -> Option<&CStr> {
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
   }
 
   /// Queries the path of the save directory.
-  fn get_save_directory(&self) -> OptionCStr {
-    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
+  fn get_save_directory(&self) -> Option<&CStr> {
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
   }
 
   /// Returns the "system" directory of the frontend. This directory can be used to store system
@@ -146,13 +120,13 @@ pub trait RetroEnvironment: Sized {
   /// NOTE: Some cores used this folder also for "save" data such as memory cards, etc, for lack of
   /// a better place to put it. This is now discouraged, and if possible, cores should try to use
   /// the new GET_SAVE_DIRECTORY.
-  fn get_system_directory(&self) -> OptionCStr {
-    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
+  fn get_system_directory(&self) -> Option<&CStr> {
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
   }
 
   /// Queries the username associated with the frontend.
-  fn get_username(&self) -> OptionCStr {
-    unsafe { self.get_c_str_raw(RETRO_ENVIRONMENT_GET_USERNAME) }
+  fn get_username(&self) -> Option<&CStr> {
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_USERNAME) }
   }
 
   /// Gets an interface for logging. This is useful for logging in a cross-platform way as certain
@@ -161,8 +135,6 @@ pub trait RetroEnvironment: Sized {
   /// to [std::io::Stderr] (via [eprintln], [StderrLogger] or [FallbackLogger]) as desired.
   fn get_log_interface(&self) -> Option<PlatformLogger> {
     unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_LOG_INTERFACE) }
-      .and_then(|cb: retro_log_callback| cb.log)
-      .map(PlatformLogger::new)
   }
 }
 
@@ -258,104 +230,3 @@ impl<T> GetMemoryDataEnvironment for T where T: RetroEnvironment {}
 
 pub trait GetMemorySizeEnvironment: RetroEnvironment {}
 impl<T> GetMemorySizeEnvironment for T where T: RetroEnvironment {}
-
-unsafe fn get_option_from_callback<T>(cb: &EnvironmentCallback, cmd: impl Into<u32>, mut data: T) -> Option<T> {
-  if cb(cmd.into(), &mut data as *mut _ as *mut c_void) {
-    Some(data)
-  } else {
-    None
-  }
-}
-
-impl RetroEnvironment for EnvironmentCallback {
-  unsafe fn get_raw<T>(&self, cmd: impl Into<u32>) -> Option<T>
-  where
-    T: Default + RetroEnvironmentData,
-  {
-    get_option_from_callback(self, cmd.into(), T::default())
-  }
-
-  unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
-  where
-    T: RetroEnvironmentData,
-  {
-    get_option_from_callback(self, cmd, data.into())
-  }
-
-  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool {
-    self(cmd.into(), data as *const _ as *mut c_void)
-  }
-
-  unsafe fn parameterized_set_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T>) -> Option<T>
-  where
-    T: RetroEnvironmentData,
-  {
-    get_option_from_callback(self, cmd, data.into())
-  }
-
-  unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool {
-    self(cmd.into(), core::ptr::null_mut())
-  }
-}
-
-impl RetroEnvironment for NullEnvironment {
-  unsafe fn get_raw<T>(&self, _cmd: impl Into<u32>) -> Option<T>
-  where
-    T: Default + RetroEnvironmentData,
-  {
-    None
-  }
-
-  unsafe fn parameterized_get_raw<T>(&self, _cmd: impl Into<u32>, _data: impl Into<T>) -> Option<T>
-  where
-    T: RetroEnvironmentData,
-  {
-    None
-  }
-
-  unsafe fn set_raw(&mut self, _cmd: impl Into<u32>, _data: &impl RetroEnvironmentData) -> bool {
-    false
-  }
-
-  unsafe fn parameterized_set_raw<T>(&mut self, _cmd: impl Into<u32>, _data: impl Into<T>) -> Option<T>
-  where
-    T: RetroEnvironmentData,
-  {
-    None
-  }
-
-  unsafe fn cmd_raw(&mut self, _cmd: impl Into<u32>) -> bool {
-    false
-  }
-}
-
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ScreenRotation {
-  #[default]
-  ZeroDegrees = 0,
-  NinetyDegrees = 1,
-  OneEightyDegrees = 2,
-  TwoSeventyDegrees = 3,
-}
-
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default)]
-pub struct RetroMessage(retro_message);
-
-impl RetroMessage {
-  pub fn new<'a>(msg: impl Into<&'a CUtf8>, frames: u32) -> Self {
-    Self(retro_message {
-      msg: msg.into().as_ptr(),
-      frames,
-    })
-  }
-
-  pub fn msg(&self) -> &CUtf8 {
-    unsafe { CUtf8::from_c_str_unchecked(CStr::from_ptr(self.0.msg)) }
-  }
-
-  pub fn frames(&self) -> u32 {
-    self.0.frames
-  }
-}

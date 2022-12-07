@@ -27,7 +27,7 @@ impl RetroCore for Emulator {
   }
 
   fn load_game(env: &mut impl LoadGameEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
-    let system_dir = env.get_system_directory().as_str().unwrap_or("~/.config/emulator");
+    let system_dir = env.get_system_directory().into_str().unwrap_or("~/.config/emulator");
     eprintln!("[libretro_rs] load_game(). system_dir={}", system_dir);
 
     match game {

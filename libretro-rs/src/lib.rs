@@ -1,21 +1,23 @@
+extern crate core;
+
 pub use libretro_rs_sys as sys;
 
 mod av_info;
+mod convert;
 pub mod core_macro;
 mod environment;
 mod extensions;
 mod logger;
 mod memory;
-mod option_cstr;
 mod system_info;
 
 pub use av_info::*;
 pub use c_utf8;
+pub use convert::*;
 pub use environment::*;
 pub use extensions::*;
 pub use logger::*;
 pub use memory::*;
-pub use option_cstr::*;
 pub use system_info::*;
 
 pub use RetroLoadGameResult::*;
@@ -182,23 +184,23 @@ pub enum RetroGame<'a> {
   /// * `meta` contains implementation-specific metadata, if present.
   ///
   /// **Note**: "No game" support is hinted with the `RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME` key.
-  None { meta: OptionCStr<'a> },
+  None { meta: Option<&'a CStr> },
   /// Used if a core doesn't need paths, and a game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   /// * `data` contains the entire contents of the game.
-  Data { meta: OptionCStr<'a>, data: &'a [u8] },
+  Data { meta: Option<&'a CStr>, data: &'a [u8] },
   /// Used if a core needs paths, and a game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   /// * `path` contains the entire absolute path of the game.
-  Path { meta: OptionCStr<'a>, path: &'a CUtf8 },
+  Path { meta: Option<&'a CStr>, path: &'a CUtf8 },
 }
 
 impl<'a> From<Option<&retro_game_info>> for RetroGame<'a> {
   fn from(info: Option<&retro_game_info>) -> Self {
     match info {
-      None => RetroGame::None { meta: OptionCStr(None) },
+      None => RetroGame::None { meta: None },
       Some(info) => RetroGame::from(info),
     }
   }
@@ -206,7 +208,7 @@ impl<'a> From<Option<&retro_game_info>> for RetroGame<'a> {
 
 impl<'a> From<&retro_game_info> for RetroGame<'a> {
   fn from(game: &retro_game_info) -> RetroGame<'a> {
-    let meta = unsafe { OptionCStr::from_ptr(game.meta) };
+    let meta = unsafe { game.meta.as_ref().map(|x| CStr::from_ptr(x)) };
 
     match (game.path.is_null(), game.data.is_null()) {
       (true, true) => RetroGame::None { meta },
