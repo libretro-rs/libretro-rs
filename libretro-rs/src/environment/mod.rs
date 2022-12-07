@@ -124,6 +124,10 @@ pub trait RetroEnvironment: Sized {
     unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
   }
 
+  fn get_variable(&self, key: impl AsRef<CStr>) -> RetroVariableValue {
+    unsafe { self.parameterized_get_raw(RETRO_ENVIRONMENT_GET_VARIABLE, key.as_ref()) }
+  }
+
   /// Queries the username associated with the frontend.
   fn get_username(&self) -> Option<&CStr> {
     unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_USERNAME) }

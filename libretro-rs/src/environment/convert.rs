@@ -19,6 +19,7 @@ impl RetroEnvironmentData for Option<&c_char> {}
 impl RetroEnvironmentData for retro_log_callback {}
 impl RetroEnvironmentData for RetroPixelFormat {}
 impl RetroEnvironmentData for RetroGameGeometry {}
+impl RetroEnvironmentData for RetroVariable {}
 impl RetroEnvironmentData for u32 {}
 
 /// Unsafe type conversions.
