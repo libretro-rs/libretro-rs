@@ -57,3 +57,11 @@ impl RetroEnvironmentResult for Option<PlatformLogger> {
     x.and_then(|cb| cb.log).map(PlatformLogger::new)
   }
 }
+
+impl<'a> RetroEnvironmentResult for RetroVariableValue<'a> {
+  type Source = retro_variable;
+
+  unsafe fn unsafe_from(x: Option<Self::Source>) -> Self {
+    Self(x.map(|var| CStr::from_ptr(var.value)))
+  }
+}

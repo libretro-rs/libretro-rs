@@ -36,18 +36,18 @@ impl RetroMessage {
 
 impl RetroEnvironmentData for RetroMessage {}
 
-#[repr(transparent)]
-pub struct RetroVariable(pub retro_variable);
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RetroVariableKey<'a>(pub &'a CStr);
 
-impl<'a> From<&'a CStr> for RetroVariable {
-  fn from(key: &CStr) -> Self {
-    Self(retro_variable {
-      key: key.as_ptr(),
-      value: core::ptr::null(),
-    })
+impl RetroVariableKey {
+  fn new(key: impl AsRef<CStr>) -> Self {
+    Self(key.as_ref())
+  }
+}
+
+impl<'a> AsRef<CStr> for RetroVariableKey<'a> {
+  fn as_ref(&self) -> &CStr {
+    self.0
   }
 }
 
@@ -55,10 +55,10 @@ impl<'a> From<&'a CStr> for RetroVariable {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RetroVariableValue<'a>(pub Option<&'a CStr>);
 
-impl<'a> RetroEnvironmentResult for RetroVariableValue<'a> {
-  type Source = RetroVariable;
+impl<'a> Deref for RetroVariableValue<'a> {
+  type Target = Option<&'a CStr>;
 
-  unsafe fn unsafe_from(x: Option<Self::Source>) -> Self {
-    Self(x.map(|var| CStr::from_ptr(var.0.value)))
+  fn deref(&self) -> &Self::Target {
+    &self.0
   }
 }
