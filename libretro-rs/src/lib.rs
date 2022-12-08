@@ -79,7 +79,8 @@ impl RetroAudioInfo {
   }
 }
 
-#[derive(Debug)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RetroDevice {
   None = 0,
   Joypad = 1,
@@ -197,7 +198,7 @@ impl RetroEnvironment {
   }
 
   /// Queries a string slice from the environment. A null pointer is interpreted as `None`.
-  pub fn get_str<'a>(&'a self, key: u32) -> Option<&'a str> {
+  pub fn get_str(&self, key: u32) -> Option<&str> {
     unsafe {
       let s = self.get(key)?;
       CStr::from_ptr(s).to_str().ok()
@@ -205,6 +206,9 @@ impl RetroEnvironment {
   }
 
   /// Queries a struct from the environment. A null pointer is interpreted as `None`.
+  ///
+  /// # Safety
+  /// The environment callback must be used in accordance with the libretro specification.
   pub unsafe fn get<T>(&self, key: u32) -> Option<*const T> {
     let mut val: *const T = std::ptr::null();
     if self.get_raw(key, &mut val) && !val.is_null() {
@@ -215,6 +219,9 @@ impl RetroEnvironment {
   }
 
   /// Directly invokes the underlying `retro_environment_t` in a "get" fashion.
+  ///
+  /// # Safety
+  /// The environment callback must be used in accordance with the libretro specification.
   #[inline]
   pub unsafe fn get_raw<T>(&self, key: u32, output: *mut *const T) -> bool {
     let cb = self.0.expect("`get_raw` called without a `retro_environment` callback");
@@ -232,6 +239,9 @@ impl RetroEnvironment {
   }
 
   /// Directly invokes the underlying `retro_environment_t` in a "set" fashion.
+  ///
+  /// # Safety
+  /// The environment callback must be used in accordance with the libretro specification.
   #[inline]
   pub unsafe fn set_raw<T>(&mut self, key: u32, val: *const T) -> bool {
     let cb = self.0.expect("`set_raw` called without a `retro_environment` callback");
@@ -239,6 +249,9 @@ impl RetroEnvironment {
   }
 
   /// Directly invokes the underlying `retro_environment_t` in a "command" fashion.
+  ///
+  /// # Safety
+  /// The environment callback must be used in accordance with the libretro specification.
   #[inline]
   pub unsafe fn cmd_raw(&mut self, key: u32) -> bool {
     let cb = self.0.expect("`cmd_raw` called without a `retro_environment` callback");
@@ -278,11 +291,11 @@ impl<'a> From<&retro_game_info> for RetroGame<'a> {
       (true, true) => RetroGame::None { meta },
       (_, false) => unsafe {
         let data = std::slice::from_raw_parts(game.data as *const u8, game.size as usize);
-        return RetroGame::Data { meta, data };
+        RetroGame::Data { meta, data }
       },
       (false, _) => unsafe {
         let path = CStr::from_ptr(game.path).to_str().expect("game path contains invalid data");
-        return RetroGame::Path { meta, path };
+        RetroGame::Path { meta, path }
       },
     }
   }
@@ -304,18 +317,20 @@ impl RetroGameGeometry {
   }
 }
 
-impl Into<retro_game_geometry> for RetroGameGeometry {
-  fn into(self) -> retro_game_geometry {
+impl From<RetroGameGeometry> for retro_game_geometry {
+  fn from(geometry: RetroGameGeometry) -> retro_game_geometry {
     retro_game_geometry {
-      base_width: self.width,
-      base_height: self.height,
+      base_width: geometry.width,
+      base_height: geometry.height,
       max_width: 0,
       max_height: 0,
-      aspect_ratio: self.aspect_ratio,
+      aspect_ratio: geometry.aspect_ratio,
     }
   }
 }
 
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RetroJoypadButton {
   B = 0,
   Y = 1,
@@ -333,27 +348,31 @@ pub enum RetroJoypadButton {
   R2 = 13,
   L3 = 14,
   R3 = 15,
+  #[cfg(experimental)]
+  Mask = 256,
 }
 
-impl Into<u32> for RetroJoypadButton {
-  fn into(self) -> u32 {
-    match self {
-      Self::B => 0,
-      Self::Y => 1,
-      Self::Select => 2,
-      Self::Start => 3,
-      Self::Up => 4,
-      Self::Down => 5,
-      Self::Left => 6,
-      Self::Right => 7,
-      Self::A => 8,
-      Self::X => 9,
-      Self::L1 => 10,
-      Self::R1 => 11,
-      Self::L2 => 12,
-      Self::R2 => 13,
-      Self::L3 => 14,
-      Self::R3 => 15,
+impl From<RetroJoypadButton> for u32 {
+  fn from(button: RetroJoypadButton) -> u32 {
+    match button {
+      RetroJoypadButton::B => 0,
+      RetroJoypadButton::Y => 1,
+      RetroJoypadButton::Select => 2,
+      RetroJoypadButton::Start => 3,
+      RetroJoypadButton::Up => 4,
+      RetroJoypadButton::Down => 5,
+      RetroJoypadButton::Left => 6,
+      RetroJoypadButton::Right => 7,
+      RetroJoypadButton::A => 8,
+      RetroJoypadButton::X => 9,
+      RetroJoypadButton::L1 => 10,
+      RetroJoypadButton::R1 => 11,
+      RetroJoypadButton::L2 => 12,
+      RetroJoypadButton::R2 => 13,
+      RetroJoypadButton::L3 => 14,
+      RetroJoypadButton::R3 => 15,
+      #[cfg(experimental)]
+      RetroJoypadButton::Mask => 256,
     }
   }
 }
@@ -370,7 +389,8 @@ pub enum RetroLoadGameResult<T> {
 }
 
 /// Represents the set of regions supported by `libretro`.
-#[derive(Clone, Copy)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RetroRegion {
   /// A 30 frames/second (60 fields/second) video system.
   NTSC = 0,
@@ -378,25 +398,26 @@ pub enum RetroRegion {
   PAL = 1,
 }
 
-impl Into<u32> for RetroRegion {
-  fn into(self) -> u32 {
-    match self {
-      Self::NTSC => 0,
-      Self::PAL => 1,
+impl From<RetroRegion> for u32 {
+  fn from(region: RetroRegion) -> u32 {
+    match region {
+      RetroRegion::NTSC => 0,
+      RetroRegion::PAL => 1,
     }
   }
 }
 
-#[derive(Clone, Copy)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RetroPixelFormat {
   RGB1555,
   XRGB8888,
   RGB565,
 }
 
-impl Into<u32> for RetroPixelFormat {
-  fn into(self) -> u32 {
-    match self {
+impl From<RetroPixelFormat> for u32 {
+  fn from(format: RetroPixelFormat) -> u32 {
+    match format {
       RetroPixelFormat::RGB1555 => 0,
       RetroPixelFormat::XRGB8888 => 1,
       RetroPixelFormat::RGB565 => 2,
@@ -432,7 +453,7 @@ impl RetroRuntime {
       .audio_sample_batch
       .expect("`upload_audio_frame` called without registering an `audio_sample_batch` callback");
 
-    unsafe { cb(frame.as_ptr(), (frame.len() as u64) / 2) as usize }
+    unsafe { cb(frame.as_ptr(), frame.len() / 2) }
   }
 
   /// Sends audio data to the `libretro` frontend.
@@ -450,7 +471,7 @@ impl RetroRuntime {
       .video_refresh
       .expect("`upload_video_frame` called without registering a `video_refresh` callback");
 
-    unsafe { cb(frame.as_ptr() as *const libc::c_void, width, height, pitch as u64) }
+    unsafe { cb(frame.as_ptr() as *const libc::c_void, width, height, pitch) }
   }
 
   /// Returns true if the specified button is pressed, false otherwise.
@@ -463,9 +484,7 @@ impl RetroRuntime {
     let device = RETRO_DEVICE_JOYPAD;
     let index = 0;
     let id = btn.into();
-    unsafe {
-      cb(port, device, index, id) != 0
-    }
+    unsafe { cb(port, device, index, id) != 0 }
   }
 }
 
@@ -489,7 +508,7 @@ impl RetroSystemInfo {
   }
 
   pub fn with_valid_extensions(mut self, extensions: &[&str]) -> Self {
-    self.valid_extensions = if extensions.len() == 0 {
+    self.valid_extensions = if extensions.is_empty() {
       None
     } else {
       CString::new(extensions.join("|")).ok()
@@ -731,7 +750,10 @@ impl<T: RetroCore> RetroInstance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_cheat_set` API call.
-  pub fn on_cheat_set(&mut self, index: libc::c_uint, enabled: bool, code: *const libc::c_char) {
+  ///
+  /// # Safety
+  /// `code` must be a valid argument to [CStr::from_ptr].
+  pub unsafe fn on_cheat_set(&mut self, index: libc::c_uint, enabled: bool, code: *const libc::c_char) {
     unsafe {
       let code = CStr::from_ptr(code).to_str().expect("`code` contains invalid data");
       let mut env = self.environment();
@@ -740,7 +762,10 @@ impl<T: RetroCore> RetroInstance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
-  pub fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
+  ///
+  /// # Safety
+  /// `game` must remain valid until [RetroInstance::on_unload_game] is called.
+  pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
     let mut env = self.environment();
 
     let game = if game.is_null() {
@@ -755,7 +780,12 @@ impl<T: RetroCore> RetroInstance<T> {
         self.system_av_info = None;
         false
       }
-      RetroLoadGameResult::Success { region, audio, video, core } => {
+      RetroLoadGameResult::Success {
+        region,
+        audio,
+        video,
+        core,
+      } => {
         self.system = Some(core);
         self.system_region = Some(region);
         self.system_av_info = Some(RetroSystemAvInfo { audio, video });
