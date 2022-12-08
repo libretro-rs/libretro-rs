@@ -16,10 +16,11 @@ pub trait RetroEnvironmentData {}
 impl RetroEnvironmentData for () {}
 impl RetroEnvironmentData for bool {}
 impl RetroEnvironmentData for Option<&c_char> {}
+impl RetroEnvironmentData for retro_hw_render_callback {}
 impl RetroEnvironmentData for retro_log_callback {}
 impl RetroEnvironmentData for RetroPixelFormat {}
 impl RetroEnvironmentData for RetroGameGeometry {}
-impl RetroEnvironmentData for RetroVariable {}
+impl RetroEnvironmentData for retro_variable {}
 impl RetroEnvironmentData for u32 {}
 
 /// Unsafe type conversions.
@@ -58,7 +59,7 @@ impl RetroEnvironmentResult for Option<PlatformLogger> {
   }
 }
 
-impl<'a> RetroEnvironmentResult for RetroVariableValue<'a> {
+impl<'a> RetroEnvironmentResult for RetroVariable<'a> {
   type Source = retro_variable;
 
   unsafe fn unsafe_from(x: Option<Self::Source>) -> Self {

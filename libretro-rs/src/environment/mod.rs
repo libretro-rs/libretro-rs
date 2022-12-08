@@ -124,7 +124,7 @@ pub trait RetroEnvironment: Sized {
     unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
   }
 
-  fn get_variable(&self, key: impl AsRef<CStr>) -> RetroVariableValue {
+  fn get_variable(&self, key: &impl AsRef<CStr>) -> RetroVariable {
     unsafe { self.parameterized_get_raw(RETRO_ENVIRONMENT_GET_VARIABLE, key.as_ref()) }
   }
 

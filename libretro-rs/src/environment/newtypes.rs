@@ -1,5 +1,4 @@
 use crate::*;
-use std::marker::PhantomData;
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -36,26 +35,11 @@ impl RetroMessage {
 
 impl RetroEnvironmentData for RetroMessage {}
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct RetroVariableKey<'a>(pub &'a CStr);
-
-impl RetroVariableKey {
-  fn new(key: impl AsRef<CStr>) -> Self {
-    Self(key.as_ref())
-  }
-}
-
-impl<'a> AsRef<CStr> for RetroVariableKey<'a> {
-  fn as_ref(&self) -> &CStr {
-    self.0
-  }
-}
-
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct RetroVariableValue<'a>(pub Option<&'a CStr>);
+pub struct RetroVariable<'a>(pub Option<&'a CStr>);
 
-impl<'a> Deref for RetroVariableValue<'a> {
+impl<'a> Deref for RetroVariable<'a> {
   type Target = Option<&'a CStr>;
 
   fn deref(&self) -> &Self::Target {
