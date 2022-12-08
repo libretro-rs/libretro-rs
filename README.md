@@ -41,3 +41,14 @@ et voilà! Running `cargo build` will produce a shared library (`.so`, `.dll`, e
 ```shell
 $ retroarch --verbose -L libemulator.so /path/to/game.rom
 ```
+
+## Example
+
+The `example` folder contains a working CHIP-8 emulator. You can run it using this command:
+
+```shell
+$ cargo build -p example
+$ retroarch --verbose -L ./target/debug/libexample.so <game path>
+```
+
+Replace `.so` with `.dll` if running on Windows.

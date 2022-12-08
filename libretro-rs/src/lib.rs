@@ -10,8 +10,8 @@ pub trait RetroCore: Sized {
   /// Called during `retro_set_environment`.
   fn set_environment(env: &mut RetroEnvironment) {}
 
-  /// Called during `retro_init()`. This function is provided for the sake of completeness; it's generally redundant
-  /// with [load_game].
+  /// Called during `retro_init`. This function is provided for the sake of completeness; it's generally redundant
+  /// with [`RetroCore::load_game`].
   fn init(env: &mut RetroEnvironment) {}
 
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
@@ -114,7 +114,7 @@ impl TryFrom<u32> for RetroDevice {
 pub struct RetroDevicePort(u8);
 
 impl RetroDevicePort {
-  /// Creates a [RetroDevicePort].
+  /// Creates a [`RetroDevicePort`].
   pub fn new(port_number: u8) -> Self {
     RetroDevicePort(port_number)
   }
@@ -260,41 +260,54 @@ impl RetroEnvironment {
 }
 
 /// Represents the possible ways that a frontend can pass game information to a core.
-pub enum RetroGame<'a> {
+#[derive(Debug)]
+pub enum RetroGame {
   /// Used if a core supports "no game" and no game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   ///
   /// **Note**: "No game" support is hinted with the `RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME` key.
-  None { meta: Option<&'a str> },
+  None { meta: Option<String> },
   /// Used if a core doesn't need paths, and a game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   /// * `data` contains the entire contents of the game.
-  Data { meta: Option<&'a str>, data: &'a [u8] },
+  /// * `path` contains the entire absolute path of the game.
+  Data {
+    meta: Option<String>,
+    path: String,
+    data: Vec<u8>,
+  },
   /// Used if a core needs paths, and a game was selected.
   ///
   /// * `meta` contains implementation-specific metadata, if present.
   /// * `path` contains the entire absolute path of the game.
-  Path { meta: Option<&'a str>, path: &'a str },
+  Path { meta: Option<String>, path: String },
 }
 
-impl<'a> From<&retro_game_info> for RetroGame<'a> {
-  fn from(game: &retro_game_info) -> RetroGame<'a> {
+impl<'a> From<&retro_game_info> for RetroGame {
+  fn from(game: &retro_game_info) -> RetroGame {
     let meta = if game.meta.is_null() {
       None
     } else {
-      unsafe { CStr::from_ptr(game.meta).to_str().ok() }
+      unsafe { CStr::from_ptr(game.meta).to_str().map(ToString::to_string).ok() }
     };
 
     match (game.path.is_null(), game.data.is_null()) {
       (true, true) => RetroGame::None { meta },
       (_, false) => unsafe {
-        let data = std::slice::from_raw_parts(game.data as *const u8, game.size as usize);
-        RetroGame::Data { meta, data }
+        let data = std::slice::from_raw_parts(game.data as *const u8, game.size as usize).to_vec();
+        let path = CStr::from_ptr(game.path)
+          .to_str()
+          .map(ToString::to_string)
+          .expect("game path contains invalid data");
+        RetroGame::Data { meta, path, data }
       },
       (false, _) => unsafe {
-        let path = CStr::from_ptr(game.path).to_str().expect("game path contains invalid data");
+        let path = CStr::from_ptr(game.path)
+          .to_str()
+          .map(ToString::to_string)
+          .expect("game path contains invalid data");
         RetroGame::Path { meta, path }
       },
     }
@@ -592,18 +605,18 @@ pub struct RetroInstance<T: RetroCore> {
 impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_get_system_info` API call.
   pub fn on_get_system_info(&mut self, info: &mut retro_system_info) {
-    let si = T::get_system_info();
+    let system_info = T::get_system_info();
 
-    info.library_name = si.name.as_ptr();
-    info.library_version = si.version.as_ptr();
-    info.block_extract = si.block_extract;
-    info.need_fullpath = si.need_full_path;
-    info.valid_extensions = match si.valid_extensions.as_ref() {
+    info.library_name = system_info.name.as_ptr();
+    info.library_version = system_info.version.as_ptr();
+    info.block_extract = system_info.block_extract;
+    info.need_fullpath = system_info.need_full_path;
+    info.valid_extensions = match system_info.valid_extensions.as_ref() {
       None => std::ptr::null(),
       Some(ext) => ext.as_ptr(),
     };
 
-    self.system_info = Some(si);
+    self.system_info = Some(system_info);
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_system_av_info` API call.
@@ -752,7 +765,7 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_cheat_set` API call.
   ///
   /// # Safety
-  /// `code` must be a valid argument to [CStr::from_ptr].
+  /// `code` must be a valid argument to [`CStr::from_ptr`].
   pub unsafe fn on_cheat_set(&mut self, index: libc::c_uint, enabled: bool, code: *const libc::c_char) {
     unsafe {
       let code = CStr::from_ptr(code).to_str().expect("`code` contains invalid data");
@@ -764,7 +777,7 @@ impl<T: RetroCore> RetroInstance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
   ///
   /// # Safety
-  /// `game` must remain valid until [RetroInstance::on_unload_game] is called.
+  /// `game` must remain valid until [`RetroInstance::on_unload_game`] is called.
   pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
     let mut env = self.environment();
 

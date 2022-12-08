@@ -13,7 +13,7 @@ fn main() {
     .allowlist_type("^retro_.+$")
     .allowlist_var("^RETRO_.+$")
     .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
-    .layout_tests(false)
+    .layout_tests(true)
     .parse_callbacks(Box::new(bindgen::CargoCallbacks))
     .generate()
     .expect("Unable to generate bindings");
