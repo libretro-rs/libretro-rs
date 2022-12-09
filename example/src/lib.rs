@@ -5,8 +5,8 @@ use libretro_rs::*;
 pub struct Emulator;
 
 impl RetroCore for Emulator {
-  type SpecialGameType = NotApplicable;
-  type SubsystemMemoryType = NotApplicable;
+  type SpecialGameType = ();
+  type SubsystemMemoryType = ();
 
   fn get_system_info() -> RetroSystemInfo {
     eprintln!("[libretro_rs] get_system_info()");

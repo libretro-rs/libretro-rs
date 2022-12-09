@@ -1,3 +1,5 @@
+use crate::RetroTypeId;
+
 /// Enum for the `RETRO_MEMORY_*` constants in `libretro.h`, as well as
 /// user-defined subsystem memory types.
 pub enum RetroMemoryType<T> {
@@ -10,7 +12,7 @@ pub enum RetroMemoryType<T> {
 
 impl<T> From<RetroMemoryType<T>> for u16
 where
-  T: Into<u8>,
+  T: RetroTypeId,
 {
   /// Converts the standard memory types back into their constants, and
   /// left-shifts subsystem memory types to the upper 8 bits as recommended
@@ -22,14 +24,14 @@ where
       RTC => 1,
       SystemRam => 2,
       VideoRam => 3,
-      Subsystem(subsystem_type) => (subsystem_type.into() as u16) << 8,
+      Subsystem(subsystem_type) => (subsystem_type.into_discriminant() as u16) << 8,
     }
   }
 }
 
 impl<T> TryFrom<u16> for RetroMemoryType<T>
 where
-  T: TryFrom<u8>,
+  T: RetroTypeId,
 {
   type Error = &'static str;
 
@@ -45,9 +47,9 @@ where
         if mem_type < 256 {
           Err("Unknown standard memory type")
         } else {
-          T::try_from((mem_type >> 8) as u8)
+          T::from_discriminant((mem_type >> 8) as u8)
             .map(|mem_type| Subsystem(mem_type))
-            .map_err(|_| "Unknown subsystem memory type")
+            .ok_or("Unknown subsystem memory type")
         }
       }
     }

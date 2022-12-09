@@ -27,20 +27,10 @@ use core::ffi::*;
 use core::ops::*;
 use sys::*;
 
-pub struct NotApplicable();
-
-impl TryFrom<u8> for NotApplicable {
-  type Error = ();
-
-  fn try_from(_: u8) -> Result<Self, Self::Error> {
-    Err(())
-  }
-}
-
 #[allow(unused_variables)]
 pub trait RetroCore: Sized {
-  type SpecialGameType: TryFrom<u8>;
-  type SubsystemMemoryType: TryFrom<u8>;
+  type SpecialGameType: RetroTypeId;
+  type SubsystemMemoryType: RetroTypeId;
 
   /// Called during `retro_set_environment`.
   fn set_environment(env: &mut impl SetEnvironmentEnvironment) {}
@@ -113,8 +103,23 @@ pub trait RetroCore: Sized {
     None
   }
 
-  fn get_memory_size(&self, env: &mut impl GetMemorySizeEnvironment, id: RetroMemoryType<Self::SubsystemMemoryType>) -> usize {
+  fn get_memory_size(&self, _env: &mut impl GetMemorySizeEnvironment, _id: RetroMemoryType<Self::SubsystemMemoryType>) -> usize {
     0
+  }
+}
+
+trait RetroTypeId: Sized {
+  fn into_discriminant(self) -> u8;
+  fn from_discriminant(id: u8) -> Option<Self>;
+}
+
+impl RetroTypeId for () {
+  fn into_discriminant(self) -> u8 {
+    0
+  }
+
+  fn from_discriminant(_id: u8) -> Option<Self> {
+    None
   }
 }
 
@@ -591,7 +596,7 @@ impl<T: RetroCore> RetroInstance<T> {
   pub fn on_load_game_special(&mut self, game_type: c_uint, info: &retro_game_info, _num_info: usize) -> bool {
     let mut env = self.environment();
     let game_type = u8::try_from(game_type).expect("on_load_game_special() received a game_type outside the expected range.");
-    if let Ok(game_type) = T::SpecialGameType::try_from(game_type) {
+    if let Some(game_type) = T::SpecialGameType::from_discriminant(game_type) {
       if let Success(core) = T::load_game_special(&mut env, game_type, info.into()) {
         self.system = Some(core);
         return true;
