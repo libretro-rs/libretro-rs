@@ -2,7 +2,7 @@ use core::ffi::*;
 use core::ops::*;
 use libretro_rs_sys::*;
 
-/// Rust interface for [retro_system_av_info].
+/// Rust interface for [`retro_system_av_info`].
 #[repr(transparent)]
 #[derive(Debug, Clone)]
 pub struct RetroSystemAVInfo(retro_system_av_info);
@@ -16,7 +16,7 @@ impl RetroSystemAVInfo {
     })
   }
 
-  /// Returns a [RetroSystemAVInfo] with the default [RetroSystemTiming].
+  /// Returns a [`RetroSystemAVInfo`] with the default [`RetroSystemTiming`].
   pub fn default_timings(geometry: RetroGameGeometry) -> Self {
     Self::new(geometry, RetroSystemTiming::default())
   }
@@ -52,13 +52,13 @@ impl From<RetroSystemAVInfo> for retro_system_av_info {
   }
 }
 
-/// Rust interface for [retro_game_geometry].
+/// Rust interface for [`retro_game_geometry`].
 #[repr(transparent)]
 #[derive(Clone, Debug)]
 pub struct RetroGameGeometry(retro_game_geometry);
 
 impl RetroGameGeometry {
-  /// Creates a [retro_game_geometry] with fixed width and height and automatically
+  /// Creates a [`retro_game_geometry`] with fixed width and height and automatically
   /// derived aspect ratio.
   pub fn fixed(width: u16, height: u16) -> Self {
     Self(retro_game_geometry {
@@ -70,7 +70,7 @@ impl RetroGameGeometry {
     })
   }
 
-  /// Creates a [retro_game_geometry] with the given base and max width and height,
+  /// Creates a [`retro_game_geometry`] with the given base and max width and height,
   /// and automatically derived aspect ratio.
   pub fn variable(width: RangeInclusive<u16>, height: RangeInclusive<u16>) -> Self {
     Self::new(width, height, 0.0)
@@ -130,7 +130,7 @@ impl From<RetroGameGeometry> for retro_game_geometry {
   }
 }
 
-/// Rust interface for [retro_system_timing].
+/// Rust interface for [`retro_system_timing`].
 #[repr(transparent)]
 #[derive(Clone, Debug)]
 pub struct RetroSystemTiming(retro_system_timing);

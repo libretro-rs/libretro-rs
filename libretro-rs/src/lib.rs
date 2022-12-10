@@ -77,11 +77,7 @@ pub trait RetroCore: Sized {
 
   fn unload_game(&mut self, env: &mut RetroEnvironment) {}
 
-  fn get_memory_data(
-    &mut self,
-    env: &mut RetroEnvironment,
-    _id: RetroMemoryType<Self::SubsystemMemoryType>,
-  ) -> Option<&mut [u8]> {
+  fn get_memory_data(&mut self, env: &mut RetroEnvironment, id: RetroMemoryType<Self::SubsystemMemoryType>) -> Option<&mut [u8]> {
     None
   }
 
@@ -839,25 +835,17 @@ impl<T: RetroCore> RetroInstance<T> {
   pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
     let mut env = self.environment();
     let game = game.as_ref().map_or_else(RetroGame::default, RetroGame::from);
-    if let RetroLoadGameResult::Success(core) = T::load_game(&mut env, game) {
-      self.system = Some(core);
-      return true;
-    }
-    false
+    self.system = T::load_game(&mut env, game).into();
+    self.system.is_some()
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
   pub fn on_load_game_special(&mut self, game_type: libc::c_uint, info: &retro_game_info, _num_info: libc::size_t) -> bool {
     let mut env = self.environment();
-    u8::try_from(game_type)
-      .ok()
-      .and_then(|game_type| T::SpecialGameType::from_discriminant(game_type))
-      .and_then(|game_type| T::load_game_special(&mut env, game_type, info.into()).into())
-      .map(|core| {
-        self.system = Some(core);
-        true
-      })
-      .unwrap_or(false)
+    self.system = (u8::try_from(game_type).ok())
+      .and_then(T::SpecialGameType::from_discriminant)
+      .and_then(|game_type| T::load_game_special(&mut env, game_type, info.into()).into());
+    self.system.is_some()
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_unload_game` API call.
@@ -876,23 +864,19 @@ impl<T: RetroCore> RetroInstance<T> {
   pub fn on_get_memory_data(&mut self, id: libc::c_uint) -> *mut () {
     let mut env = self.environment();
     self.core_mut(|core| {
-      u16::try_from(id)
-        .ok()
+      (u16::try_from(id).ok())
         .and_then(|id| RetroMemoryType::try_from(id).ok())
         .and_then(|id| core.get_memory_data(&mut env, id))
-        .map(|data| data.as_mut_ptr() as *mut ())
-        .unwrap_or(std::ptr::null_mut())
+        .map_or_else(std::ptr::null_mut, |data| data.as_mut_ptr() as *mut ())
     })
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
   pub fn on_get_memory_size(&mut self, id: libc::c_uint) -> libc::size_t {
     let mut env = self.environment();
-    u16::try_from(id)
-      .ok()
+    (u16::try_from(id).ok())
       .and_then(|id| RetroMemoryType::try_from(id).ok())
-      .map(|id| self.core_mut(|core| core.get_memory_size(&mut env, id)))
-      .unwrap_or(0)
+      .map_or(0, |id| self.core_mut(|core| core.get_memory_size(&mut env, id)))
   }
 
   #[inline]
