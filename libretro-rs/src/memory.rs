@@ -38,18 +38,17 @@ where
 
   /// Attempts to convert a [u16] into a known [RetroMemoryType].
   fn try_from(mem_type: u16) -> Result<Self, Self::Error> {
-    use RetroMemoryType::*;
     match mem_type {
-      0 => Ok(SaveRam),
-      1 => Ok(RTC),
-      2 => Ok(SystemRam),
-      3 => Ok(VideoRam),
+      0 => Ok(Self::SaveRam),
+      1 => Ok(Self::RTC),
+      2 => Ok(Self::SystemRam),
+      3 => Ok(Self::VideoRam),
       _ => {
         if mem_type < 256 {
           Err("Unknown standard memory type")
         } else {
           T::from_discriminant((mem_type >> 8) as u8)
-            .map(|mem_type| Subsystem(mem_type))
+            .map(|mem_type| Self::Subsystem(mem_type))
             .ok_or("Unknown subsystem memory type")
         }
       }
