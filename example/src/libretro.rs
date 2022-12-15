@@ -65,9 +65,6 @@ fn key_to_retro_button(key: keyboard::Key) -> RetroJoypadButton {
 }
 
 impl RetroCore for LibretroCore {
-  type SpecialGameType = ();
-  type SubsystemMemoryType = ();
-
   fn get_system_info() -> RetroSystemInfo {
     RetroSystemInfo::new("chip8.rs", env!("CARGO_PKG_VERSION"))
   }

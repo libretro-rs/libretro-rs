@@ -121,7 +121,7 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_load_game_special(game_type: libc::c_uint, info: &retro_game_info, num_info: libc::size_t) -> bool {
+      extern "C" fn retro_load_game_special(game_type: RetroGameType, info: &retro_game_info, num_info: libc::size_t) -> bool {
         instance_mut(|instance| instance.on_load_game_special(game_type, info, num_info))
       }
 
@@ -136,12 +136,12 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_get_memory_data(id: libc::c_uint) -> *mut () {
+      extern "C" fn retro_get_memory_data(id: RetroMemoryType) -> *mut () {
         instance_mut(|instance| instance.on_get_memory_data(id))
       }
 
       #[no_mangle]
-      extern "C" fn retro_get_memory_size(id: libc::c_uint) -> libc::size_t {
+      extern "C" fn retro_get_memory_size(id: RetroMemoryType) -> libc::size_t {
         instance_mut(|instance| instance.on_get_memory_size(id))
       }
 

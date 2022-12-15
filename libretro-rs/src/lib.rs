@@ -10,10 +10,7 @@ use std::ffi::{CStr, CString};
 use sys::*;
 
 #[allow(unused_variables)]
-pub trait RetroCore: Sized {
-  type SpecialGameType: RetroTypeId;
-  type SubsystemMemoryType: RetroTypeId;
-
+pub trait RetroCore<G: TryFrom<RetroGameType> = RetroGameType, M: TryFrom<RetroMemoryType> = StandardMemoryType>: Sized {
   /// Called during `retro_set_environment`.
   fn set_environment(env: &mut RetroEnvironment) {}
 
@@ -67,37 +64,70 @@ pub trait RetroCore: Sized {
   /// required for the core to function properly.
   fn load_game(env: &mut RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self>;
 
-  fn load_game_special(
-    env: &mut RetroEnvironment,
-    game_type: Self::SpecialGameType,
-    info: RetroGame,
-  ) -> RetroLoadGameResult<Self> {
+  fn load_game_special(env: &mut RetroEnvironment, game_type: G, info: RetroGame) -> RetroLoadGameResult<Self> {
     RetroLoadGameResult::Failure
   }
 
   fn unload_game(&mut self, env: &mut RetroEnvironment) {}
 
-  fn get_memory_data(&mut self, env: &mut RetroEnvironment, id: RetroMemoryType<Self::SubsystemMemoryType>) -> Option<&mut [u8]> {
+  fn get_memory_data(&mut self, env: &mut RetroEnvironment, id: M) -> Option<&mut [u8]> {
     None
   }
 
-  fn get_memory_size(&self, _env: &mut RetroEnvironment, _id: RetroMemoryType<Self::SubsystemMemoryType>) -> usize {
+  fn get_memory_size(&self, env: &mut RetroEnvironment, id: M) -> usize {
     0
   }
 }
 
-pub trait RetroTypeId: Sized {
-  fn into_discriminant(self) -> u8;
-  fn from_discriminant(id: u8) -> Option<Self>;
-}
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RetroGameType(u32);
 
-impl RetroTypeId for () {
-  fn into_discriminant(self) -> u8 {
-    0
+impl RetroGameType {
+  pub fn new(n: u32) -> Self {
+    Self(n)
   }
 
-  fn from_discriminant(_id: u8) -> Option<Self> {
-    None
+  pub fn into_inner(self) -> u32 {
+    self.0
+  }
+}
+
+impl From<u32> for RetroGameType {
+  fn from(n: u32) -> Self {
+    Self(n)
+  }
+}
+
+impl From<RetroGameType> for u32 {
+  fn from(game_type: RetroGameType) -> Self {
+    game_type.into_inner()
+  }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RetroMemoryType(u32);
+
+impl RetroMemoryType {
+  pub fn new(n: u32) -> Self {
+    Self(n)
+  }
+
+  pub fn into_inner(self) -> u32 {
+    self.0
+  }
+}
+
+impl From<u32> for RetroMemoryType {
+  fn from(n: u32) -> Self {
+    Self(n)
+  }
+}
+
+impl From<RetroMemoryType> for u32 {
+  fn from(memory_type: RetroMemoryType) -> Self {
+    memory_type.into_inner()
   }
 }
 
@@ -112,8 +142,9 @@ impl RetroAudioInfo {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum RetroDevice {
+  #[default]
   None = 0,
   Joypad = 1,
   Mouse = 2,
@@ -142,7 +173,7 @@ impl TryFrom<u32> for RetroDevice {
 
 /// A libretro device port.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct RetroDevicePort(u8);
 
 impl RetroDevicePort {
@@ -643,7 +674,7 @@ impl RetroVideoInfo {
 }
 
 /// This is the glue layer between a `RetroCore` implementation, and the `libretro` API.
-pub struct RetroInstance<T: RetroCore> {
+pub struct RetroInstance<T> {
   pub system: Option<T>,
   pub system_info: Option<RetroSystemInfo>,
   pub system_region: Option<RetroRegion>,
@@ -840,11 +871,9 @@ impl<T: RetroCore> RetroInstance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
-  pub fn on_load_game_special(&mut self, game_type: libc::c_uint, info: &retro_game_info, _num_info: libc::size_t) -> bool {
+  pub fn on_load_game_special(&mut self, game_type: RetroGameType, info: &retro_game_info, _num_info: libc::size_t) -> bool {
     let mut env = self.environment();
-    self.system = (u8::try_from(game_type).ok())
-      .and_then(T::SpecialGameType::from_discriminant)
-      .and_then(|game_type| T::load_game_special(&mut env, game_type, info.into()).into());
+    self.system = T::load_game_special(&mut env, game_type, info.into()).into();
     self.system.is_some()
   }
 
@@ -861,22 +890,19 @@ impl<T: RetroCore> RetroInstance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.
-  pub fn on_get_memory_data(&mut self, id: libc::c_uint) -> *mut () {
+  pub fn on_get_memory_data(&mut self, id: RetroMemoryType) -> *mut () {
     let mut env = self.environment();
     self.core_mut(|core| {
-      (u16::try_from(id).ok())
-        .and_then(|id| RetroMemoryType::try_from(id).ok())
+      (id.try_into().ok())
         .and_then(|id| core.get_memory_data(&mut env, id))
         .map_or_else(std::ptr::null_mut, |data| data.as_mut_ptr() as *mut ())
     })
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
-  pub fn on_get_memory_size(&mut self, id: libc::c_uint) -> libc::size_t {
+  pub fn on_get_memory_size(&mut self, id: RetroMemoryType) -> libc::size_t {
     let mut env = self.environment();
-    (u16::try_from(id).ok())
-      .and_then(|id| RetroMemoryType::try_from(id).ok())
-      .map_or(0, |id| self.core_mut(|core| core.get_memory_size(&mut env, id)))
+    self.core_mut(|core| id.try_into().map_or(0, |id| core.get_memory_size(&mut env, id)))
   }
 
   #[inline]
