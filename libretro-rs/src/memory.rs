@@ -1,57 +1,62 @@
-use crate::RetroTypeId;
+use crate::*;
+use std::convert::Infallible;
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter};
 
-/// Enum for the `RETRO_MEMORY_*` constants in `libretro.h`, as well as
-/// user-defined subsystem memory types.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RetroMemoryType<T> {
-  SaveRam,
-  RTC,
-  SystemRam,
-  VideoRam,
-  Subsystem(T),
+/// Enum for the `RETRO_MEMORY_*` constants in `libretro.h`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum StandardMemoryType {
+  #[default]
+  SaveRam = 0,
+  RTC = 1,
+  SystemRam = 2,
+  VideoRam = 3,
 }
 
-impl<T> From<RetroMemoryType<T>> for u16
-where
-  T: RetroTypeId,
-{
-  /// Converts the standard memory types back into their constants, and
-  /// left-shifts subsystem memory types to the upper 8 bits as recommended
-  /// by the libretro API to avoid conflicts with future memory types.
-  fn from(mem_type: RetroMemoryType<T>) -> Self {
-    use RetroMemoryType::*;
-    match mem_type {
-      SaveRam => 0,
-      RTC => 1,
-      SystemRam => 2,
-      VideoRam => 3,
-      Subsystem(subsystem_type) => (subsystem_type.into_discriminant() as u16) << 8,
-    }
+impl Display for StandardMemoryType {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    Display::fmt(&(*self as u8), f)
   }
 }
 
-impl<T> TryFrom<u16> for RetroMemoryType<T>
-where
-  T: RetroTypeId,
-{
-  type Error = &'static str;
+impl From<StandardMemoryType> for RetroMemoryType {
+  /// Converts the standard memory types back into their constants, and
+  /// left-shifts subsystem memory types to the upper 8 bits as recommended
+  /// by the libretro API to avoid conflicts with future memory types.
+  fn from(mem_type: StandardMemoryType) -> Self {
+    RetroMemoryType::new(mem_type as u32)
+  }
+}
 
-  /// Attempts to convert a [u16] into a known [RetroMemoryType].
-  fn try_from(mem_type: u16) -> Result<Self, Self::Error> {
-    match mem_type {
+impl TryFrom<RetroMemoryType> for StandardMemoryType {
+  type Error = TryFromRetroMemoryTypeError;
+
+  fn try_from(mem_type: RetroMemoryType) -> Result<Self, Self::Error> {
+    match mem_type.into_inner() {
       0 => Ok(Self::SaveRam),
       1 => Ok(Self::RTC),
       2 => Ok(Self::SystemRam),
       3 => Ok(Self::VideoRam),
-      _ => {
-        if mem_type < 256 {
-          Err("Unknown standard memory type")
-        } else {
-          T::from_discriminant((mem_type >> 8) as u8)
-            .map(|mem_type| Self::Subsystem(mem_type))
-            .ok_or("Unknown subsystem memory type")
-        }
-      }
+      _ => Err(TryFromRetroMemoryTypeError(())),
     }
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// Based on std::num::TryFromIntError.
+// The crate-private field prevents use of the constructor outside the crate.
+pub struct TryFromRetroMemoryTypeError(pub(crate) ());
+
+impl Display for TryFromRetroMemoryTypeError {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "attempted to convert an unknown memory type")
+  }
+}
+
+impl Error for TryFromRetroMemoryTypeError {}
+
+impl From<Infallible> for TryFromRetroMemoryTypeError {
+  fn from(x: Infallible) -> Self {
+    match x {}
   }
 }
