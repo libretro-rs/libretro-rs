@@ -71,7 +71,7 @@ impl Core for LibretroCore {
     SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions!["png"])
   }
 
-  fn load_game(_env: &mut impl LoadGameEnvironment, game: Game) -> LoadGameResult<Self> {
+  fn load_game(_env: &mut impl LoadGameEnvironment, game: Game) -> Result<Self, LoadGameError> {
     match game {
       Game::Data { data, .. } => {
         let core = LibretroCore {
@@ -79,9 +79,9 @@ impl Core for LibretroCore {
           audio_buffer: [0; timer::AUDIO_BUFFER_SIZE * 2],
           frame_buffer: [0; display::AREA * std::mem::size_of::<i32>()],
         };
-        LoadGameResult::Success(core)
+        Ok(core)
       }
-      _ => LoadGameResult::Failure,
+      _ => Err(LoadGameError::new()),
     }
   }
 

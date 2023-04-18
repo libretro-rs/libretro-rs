@@ -129,7 +129,7 @@ impl<T: Core> Instance<T> {
     unsafe {
       let data = core::slice::from_raw_parts_mut(data as *mut u8, size);
       let mut env = self.environment();
-      self.core_ref(|core| core.serialize(&mut env, data))
+      self.core_ref(|core| core.serialize(&mut env, data).is_ok())
     }
   }
 
@@ -138,7 +138,7 @@ impl<T: Core> Instance<T> {
     unsafe {
       let data = core::slice::from_raw_parts(data as *const u8, size);
       let mut env = self.environment();
-      self.core_mut(|core| core.unserialize(&mut env, data))
+      self.core_mut(|core| core.unserialize(&mut env, data).is_ok())
     }
   }
 
@@ -167,14 +167,14 @@ impl<T: Core> Instance<T> {
   pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
     let mut env = self.environment();
     let game = game.as_ref().map_or_else(Game::default, Game::from);
-    self.system = T::load_game(&mut env, game).into();
+    self.system = T::load_game(&mut env, game).ok();
     self.system.is_some()
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
   pub fn on_load_game_special(&mut self, game_type: GameType, info: &retro_game_info, _num_info: usize) -> bool {
     let mut env = self.environment();
-    self.system = T::load_game_special(&mut env, game_type, info.into()).into();
+    self.system = T::load_game_special(&mut env, game_type, info.into()).ok();
     self.system.is_some()
   }
 

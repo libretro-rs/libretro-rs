@@ -4,6 +4,7 @@ mod av_info;
 mod convert;
 pub mod core_macro;
 mod environment;
+mod error;
 mod extensions;
 mod logger;
 mod memory;
@@ -13,12 +14,11 @@ pub use av_info::*;
 pub use convert::*;
 pub use core_macro::*;
 pub use environment::*;
+pub use error::*;
 pub use extensions::*;
 pub use logger::*;
 pub use memory::*;
 pub use system_info::*;
-
-pub use LoadGameResult::*;
 
 use crate::ffi::*;
 use c_utf8::CUtf8;
@@ -62,14 +62,14 @@ pub trait Core: Sized {
 
   /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn serialize(&self, env: &mut impl SerializeEnvironment, data: &mut [u8]) -> bool {
-    false
+  fn serialize(&self, env: &mut impl SerializeEnvironment, data: &mut [u8]) -> Result<(), SerializeError> {
+    Err(SerializeError::new())
   }
 
   /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn unserialize(&mut self, env: &mut impl UnserializeEnvironment, data: &[u8]) -> bool {
-    false
+  fn unserialize(&mut self, env: &mut impl UnserializeEnvironment, data: &[u8]) -> Result<(), UnserializeError> {
+    Err(UnserializeError::new())
   }
 
   fn cheat_reset(&mut self, env: &mut impl CheatResetEnvironment) {}
@@ -78,10 +78,14 @@ pub trait Core: Sized {
 
   /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
   /// required for the core to function properly.
-  fn load_game(env: &mut impl LoadGameEnvironment, game: Game) -> LoadGameResult<Self>;
+  fn load_game(env: &mut impl LoadGameEnvironment, game: Game) -> Result<Self, LoadGameError>;
 
-  fn load_game_special(env: &mut impl LoadGameSpecialEnvironment, game_type: GameType, info: Game) -> LoadGameResult<Self> {
-    Failure
+  fn load_game_special(
+    env: &mut impl LoadGameSpecialEnvironment,
+    game_type: GameType,
+    info: Game,
+  ) -> Result<Self, LoadGameError> {
+    Err(LoadGameError::new())
   }
 
   fn unload_game(&mut self, env: &mut impl UnloadGameEnvironment) {}
@@ -316,61 +320,6 @@ impl From<JoypadButton> for u32 {
       JoypadButton::R3 => 15,
       #[cfg(experimental)]
       JoypadButton::Mask => 256,
-    }
-  }
-}
-
-#[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoadGameResult<T> {
-  Failure,
-  Success(T),
-}
-
-impl<T> From<LoadGameResult<T>> for Option<T>
-where
-  T: Core,
-{
-  fn from(result: LoadGameResult<T>) -> Self {
-    match result {
-      Failure => None,
-      Success(core) => Some(core),
-    }
-  }
-}
-
-impl<T> From<Option<T>> for LoadGameResult<T>
-where
-  T: Core,
-{
-  fn from(option: Option<T>) -> Self {
-    match option {
-      None => Failure,
-      Some(core) => Success(core),
-    }
-  }
-}
-
-impl<T, E> From<Result<T, E>> for LoadGameResult<T>
-where
-  T: Core,
-{
-  fn from(result: Result<T, E>) -> Self {
-    match result {
-      Err(_) => Failure,
-      Ok(core) => Success(core),
-    }
-  }
-}
-
-impl<T> From<LoadGameResult<T>> for Result<T, ()>
-where
-  T: Core,
-{
-  fn from(result: LoadGameResult<T>) -> Self {
-    match result {
-      Failure => Err(()),
-      Success(core) => Ok(core),
     }
   }
 }
