@@ -1,7 +1,7 @@
+use crate::ffi::*;
 use crate::*;
 use c_utf8::CUtf8;
 use core::ffi::*;
-use libretro_rs_sys::*;
 
 /// Rust interface for [retro_system_info].
 #[repr(transparent)]

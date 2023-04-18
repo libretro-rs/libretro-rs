@@ -1,5 +1,5 @@
 [package]
-name = "libretro-rs-sys"
+name = "libretro-rs-ffi"
 repository = "https://github.com/libretro-rs/libretro-rs"
 license = "MIT/Apache-2.0"
 version = "0.1.0"

@@ -1,6 +1,6 @@
 extern crate core;
 
-pub use libretro_rs_sys as sys;
+pub use libretro_rs_ffi as ffi;
 
 mod av_info;
 mod convert;
@@ -25,7 +25,7 @@ pub use RetroLoadGameResult::*;
 use c_utf8::CUtf8;
 use core::ffi::*;
 use core::ops::*;
-use sys::*;
+use ffi::*;
 
 #[allow(unused_variables)]
 pub trait RetroCore: Sized {

@@ -1,6 +1,6 @@
+use crate::ffi::retro_log_level::*;
+use crate::ffi::*;
 use c_utf8::*;
-use libretro_rs_sys::retro_log_level::*;
-use libretro_rs_sys::*;
 
 /// Trait for types that provide safe access to [retro_log_printf_t].
 pub trait RetroLogInterface {

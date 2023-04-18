@@ -2,7 +2,7 @@
 members = [
   "example",
   "libretro-rs",
-  "libretro-rs-sys"
+  "libretro-rs-ffi"
 ]
 
 [profile.dev]

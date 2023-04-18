@@ -15,5 +15,5 @@ edition = "2021"
 experimental = []
 
 [dependencies]
-libretro-rs-sys = { path = "../libretro-rs-sys" }
+libretro-rs-ffi = { path = "../libretro-rs-ffi" }
 c_utf8 = "0.1.0"

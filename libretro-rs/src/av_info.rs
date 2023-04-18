@@ -1,6 +1,6 @@
+use crate::ffi::*;
 use core::ffi::*;
 use core::ops::*;
-use libretro_rs_sys::*;
 
 /// Rust interface for [`retro_system_av_info`].
 #[repr(transparent)]
