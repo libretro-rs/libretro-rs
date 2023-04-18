@@ -9,7 +9,7 @@ macro_rules! libretro_core {
       use libretro_rs::ffi::*;
       use libretro_rs::retro::*;
 
-      static mut RETRO_INSTANCE: RetroInstance<$core> = RetroInstance {
+      static mut RETRO_INSTANCE: Instance<$core> = Instance {
         environment: None,
         audio_sample: None,
         audio_sample_batch: None,
@@ -120,7 +120,7 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_load_game_special(game_type: RetroGameType, info: &retro_game_info, num_info: usize) -> bool {
+      extern "C" fn retro_load_game_special(game_type: GameType, info: &retro_game_info, num_info: usize) -> bool {
         instance_mut(|instance| instance.on_load_game_special(game_type, info, num_info))
       }
 
@@ -135,22 +135,22 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_get_memory_data(id: RetroMemoryType) -> *mut () {
+      extern "C" fn retro_get_memory_data(id: MemoryType) -> *mut () {
         instance_mut(|instance| instance.on_get_memory_data(id))
       }
 
       #[no_mangle]
-      extern "C" fn retro_get_memory_size(id: RetroMemoryType) -> usize {
+      extern "C" fn retro_get_memory_size(id: MemoryType) -> usize {
         instance_mut(|instance| instance.on_get_memory_size(id))
       }
 
       #[inline]
-      fn instance_ref<T>(f: impl FnOnce(&RetroInstance<$core>) -> T) -> T {
+      fn instance_ref<T>(f: impl FnOnce(&Instance<$core>) -> T) -> T {
         unsafe { f(&RETRO_INSTANCE) }
       }
 
       #[inline]
-      fn instance_mut<T>(f: impl FnOnce(&mut RetroInstance<$core>) -> T) -> T {
+      fn instance_mut<T>(f: impl FnOnce(&mut Instance<$core>) -> T) -> T {
         unsafe { f(&mut RETRO_INSTANCE) }
       }
     }

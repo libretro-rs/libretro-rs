@@ -5,28 +5,28 @@ use core::ops::*;
 /// Rust interface for [`retro_system_av_info`].
 #[repr(transparent)]
 #[derive(Debug, Clone)]
-pub struct RetroSystemAVInfo(retro_system_av_info);
+pub struct SystemAVInfo(retro_system_av_info);
 
-impl RetroSystemAVInfo {
+impl SystemAVInfo {
   /// Main constructor.
-  pub fn new(geometry: RetroGameGeometry, timing: RetroSystemTiming) -> Self {
+  pub fn new(geometry: GameGeometry, timing: SystemTiming) -> Self {
     Self(retro_system_av_info {
       geometry: geometry.into(),
       timing: timing.into(),
     })
   }
 
-  /// Returns a [`RetroSystemAVInfo`] with the default [`RetroSystemTiming`].
-  pub fn default_timings(geometry: RetroGameGeometry) -> Self {
-    Self::new(geometry, RetroSystemTiming::default())
+  /// Returns a [`SystemAVInfo`] with the default [`SystemTiming`].
+  pub fn default_timings(geometry: GameGeometry) -> Self {
+    Self::new(geometry, SystemTiming::default())
   }
 
-  pub fn geometry(&self) -> RetroGameGeometry {
-    RetroGameGeometry(self.0.geometry)
+  pub fn geometry(&self) -> GameGeometry {
+    GameGeometry(self.0.geometry)
   }
 
-  pub fn timing(&self) -> RetroSystemTiming {
-    RetroSystemTiming(self.0.timing)
+  pub fn timing(&self) -> SystemTiming {
+    SystemTiming(self.0.timing)
   }
 
   pub fn into_inner(self) -> retro_system_av_info {
@@ -34,20 +34,20 @@ impl RetroSystemAVInfo {
   }
 }
 
-impl AsRef<retro_system_av_info> for RetroSystemAVInfo {
+impl AsRef<retro_system_av_info> for SystemAVInfo {
   fn as_ref(&self) -> &retro_system_av_info {
     &self.0
   }
 }
 
-impl AsMut<retro_system_av_info> for RetroSystemAVInfo {
+impl AsMut<retro_system_av_info> for SystemAVInfo {
   fn as_mut(&mut self) -> &mut retro_system_av_info {
     &mut self.0
   }
 }
 
-impl From<RetroSystemAVInfo> for retro_system_av_info {
-  fn from(av_info: RetroSystemAVInfo) -> Self {
+impl From<SystemAVInfo> for retro_system_av_info {
+  fn from(av_info: SystemAVInfo) -> Self {
     av_info.into_inner()
   }
 }
@@ -55,9 +55,9 @@ impl From<RetroSystemAVInfo> for retro_system_av_info {
 /// Rust interface for [`retro_game_geometry`].
 #[repr(transparent)]
 #[derive(Clone, Debug)]
-pub struct RetroGameGeometry(retro_game_geometry);
+pub struct GameGeometry(retro_game_geometry);
 
-impl RetroGameGeometry {
+impl GameGeometry {
   /// Creates a [`retro_game_geometry`] with fixed width and height and automatically
   /// derived aspect ratio.
   pub fn fixed(width: u16, height: u16) -> Self {
@@ -112,20 +112,20 @@ impl RetroGameGeometry {
   }
 }
 
-impl AsRef<retro_game_geometry> for RetroGameGeometry {
+impl AsRef<retro_game_geometry> for GameGeometry {
   fn as_ref(&self) -> &retro_game_geometry {
     &self.0
   }
 }
 
-impl AsMut<retro_game_geometry> for RetroGameGeometry {
+impl AsMut<retro_game_geometry> for GameGeometry {
   fn as_mut(&mut self) -> &mut retro_game_geometry {
     &mut self.0
   }
 }
 
-impl From<RetroGameGeometry> for retro_game_geometry {
-  fn from(geometry: RetroGameGeometry) -> Self {
+impl From<GameGeometry> for retro_game_geometry {
+  fn from(geometry: GameGeometry) -> Self {
     geometry.into_inner()
   }
 }
@@ -133,9 +133,9 @@ impl From<RetroGameGeometry> for retro_game_geometry {
 /// Rust interface for [`retro_system_timing`].
 #[repr(transparent)]
 #[derive(Clone, Debug)]
-pub struct RetroSystemTiming(retro_system_timing);
+pub struct SystemTiming(retro_system_timing);
 
-impl RetroSystemTiming {
+impl SystemTiming {
   /// Main constructor.
   pub fn new(fps: f64, sample_rate: f64) -> Self {
     Self(retro_system_timing { fps, sample_rate })
@@ -154,7 +154,7 @@ impl RetroSystemTiming {
   }
 }
 
-impl Default for RetroSystemTiming {
+impl Default for SystemTiming {
   /// 60.0 FPS and 44.1khz sample rate.
   fn default() -> Self {
     Self(retro_system_timing {
@@ -164,20 +164,20 @@ impl Default for RetroSystemTiming {
   }
 }
 
-impl AsRef<retro_system_timing> for RetroSystemTiming {
+impl AsRef<retro_system_timing> for SystemTiming {
   fn as_ref(&self) -> &retro_system_timing {
     &self.0
   }
 }
 
-impl AsMut<retro_system_timing> for RetroSystemTiming {
+impl AsMut<retro_system_timing> for SystemTiming {
   fn as_mut(&mut self) -> &mut retro_system_timing {
     &mut self.0
   }
 }
 
-impl From<RetroSystemTiming> for retro_system_timing {
-  fn from(timing: RetroSystemTiming) -> Self {
+impl From<SystemTiming> for retro_system_timing {
+  fn from(timing: SystemTiming) -> Self {
     timing.into_inner()
   }
 }

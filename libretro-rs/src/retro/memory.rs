@@ -19,19 +19,19 @@ impl Display for StandardMemoryType {
   }
 }
 
-impl From<StandardMemoryType> for RetroMemoryType {
+impl From<StandardMemoryType> for MemoryType {
   /// Converts the standard memory types back into their constants, and
   /// left-shifts subsystem memory types to the upper 8 bits as recommended
   /// by the libretro API to avoid conflicts with future memory types.
   fn from(mem_type: StandardMemoryType) -> Self {
-    RetroMemoryType::new(mem_type as u32)
+    MemoryType::new(mem_type as u32)
   }
 }
 
-impl TryFrom<RetroMemoryType> for StandardMemoryType {
+impl TryFrom<MemoryType> for StandardMemoryType {
   type Error = TryFromRetroMemoryTypeError;
 
-  fn try_from(mem_type: RetroMemoryType) -> Result<Self, Self::Error> {
+  fn try_from(mem_type: MemoryType) -> Result<Self, Self::Error> {
     match mem_type.into_inner() {
       0 => Ok(Self::SaveRam),
       1 => Ok(Self::RTC),

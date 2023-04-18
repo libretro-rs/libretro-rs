@@ -11,7 +11,7 @@ pub struct LibretroCore {
 }
 
 impl LibretroCore {
-  pub fn render_audio(&mut self, runtime: &RetroRuntime) {
+  pub fn render_audio(&mut self, runtime: &Runtime) {
     self.cpu.timer.wave(|n, val| {
       self.audio_buffer[(n * 2) + 0] = (val * 32767.0).clamp(-32768.0, 32767.0) as i16;
       self.audio_buffer[(n * 2) + 1] = (val * 32767.0).clamp(-32768.0, 32767.0) as i16;
@@ -20,7 +20,7 @@ impl LibretroCore {
     runtime.upload_audio_frame(&self.audio_buffer);
   }
 
-  pub fn render_video(&mut self, runtime: &RetroRuntime) {
+  pub fn render_video(&mut self, runtime: &Runtime) {
     const PIXEL_SIZE: usize = 4;
     const PITCH: usize = PIXEL_SIZE * display::WIDTH;
 
@@ -45,11 +45,11 @@ impl LibretroCore {
     self.frame_buffer[index + 3] = 0xff;
   }
 
-  pub fn update_input(&mut self, runtime: &RetroRuntime) {
+  pub fn update_input(&mut self, runtime: &Runtime) {
     for key in keyboard::Keyboard::keys() {
       // todo: chip-8 has a very clunky mapping to a controller.
 
-      let port = RetroDevicePort::new(0);
+      let port = DevicePort::new(0);
       let btn = key_to_retro_button(key);
       if runtime.is_joypad_button_pressed(port, btn) {
         self.cpu.keyboard.set_key_state(key, keyboard::KeyState::Pressed)
@@ -60,44 +60,44 @@ impl LibretroCore {
   }
 }
 
-fn key_to_retro_button(key: keyboard::Key) -> RetroJoypadButton {
+fn key_to_retro_button(key: keyboard::Key) -> JoypadButton {
   match key.ordinal() {
-    _ => RetroJoypadButton::Up,
+    _ => JoypadButton::Up,
   }
 }
 
-impl RetroCore for LibretroCore {
-  fn get_system_info() -> RetroSystemInfo {
-    RetroSystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions!["png"])
+impl Core for LibretroCore {
+  fn get_system_info() -> SystemInfo {
+    SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions!["png"])
   }
 
-  fn load_game(_env: &mut impl LoadGameEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
+  fn load_game(_env: &mut impl LoadGameEnvironment, game: Game) -> LoadGameResult<Self> {
     match game {
-      RetroGame::Data { data, .. } => {
+      Game::Data { data, .. } => {
         let core = LibretroCore {
           cpu: cpu::Cpu::new(&data),
           audio_buffer: [0; timer::AUDIO_BUFFER_SIZE * 2],
           frame_buffer: [0; display::AREA * std::mem::size_of::<i32>()],
         };
-        RetroLoadGameResult::Success(core)
+        LoadGameResult::Success(core)
       }
-      _ => RetroLoadGameResult::Failure,
+      _ => LoadGameResult::Failure,
     }
   }
 
-  fn get_system_av_info(&self, env: &mut impl GetSystemAvInfoEnvironment) -> RetroSystemAVInfo {
+  fn get_system_av_info(&self, env: &mut impl GetSystemAvInfoEnvironment) -> SystemAVInfo {
     const WINDOW_SCALE: u16 = 8;
     const WINDOW_WIDTH: u16 = WINDOW_SCALE * display::WIDTH as u16;
     const WINDOW_HEIGHT: u16 = WINDOW_SCALE * display::HEIGHT as u16;
-    env.set_pixel_format(RetroPixelFormat::XRGB8888);
-    RetroSystemAVInfo::default_timings(RetroGameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
+    env.set_pixel_format(PixelFormat::XRGB8888);
+    SystemAVInfo::default_timings(GameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
   }
 
   fn reset(&mut self, _env: &mut impl ResetEnvironment) {
     todo!()
   }
 
-  fn run(&mut self, _env: &mut impl RunEnvironment, runtime: &RetroRuntime) {
+  fn run(&mut self, _env: &mut impl RunEnvironment, runtime: &Runtime) {
     self.update_input(runtime);
 
     self.cpu.step_for(25);

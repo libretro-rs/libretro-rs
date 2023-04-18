@@ -10,13 +10,13 @@ pub enum ScreenRotation {
   TwoSeventyDegrees = 3,
 }
 
-impl RetroEnvironmentData for ScreenRotation {}
+impl EnvironmentData for ScreenRotation {}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct RetroMessage(retro_message);
+pub struct Message(retro_message);
 
-impl RetroMessage {
+impl Message {
   pub fn new<'a>(msg: impl Into<&'a CUtf8>, frames: u32) -> Self {
     Self(retro_message {
       msg: msg.into().as_ptr(),
@@ -33,7 +33,7 @@ impl RetroMessage {
   }
 }
 
-impl RetroEnvironmentData for RetroMessage {}
+impl EnvironmentData for Message {}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]

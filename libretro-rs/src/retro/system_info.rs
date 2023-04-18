@@ -3,14 +3,14 @@ use crate::retro::*;
 use c_utf8::CUtf8;
 use core::ffi::*;
 
-/// Rust interface for [retro_system_info].
+/// Rust interface for [`retro_system_info`].
 #[repr(transparent)]
 #[derive(Clone, Debug)]
-pub struct RetroSystemInfo(retro_system_info);
+pub struct SystemInfo(retro_system_info);
 
-impl RetroSystemInfo {
-  /// Minimal constructor. Leaves [RetroSystemInfo::need_fullpath] and
-  /// [RetroSystemInfo::block_extract] set to [false].
+impl SystemInfo {
+  /// Minimal constructor. Leaves [`SystemInfo::need_fullpath`] and
+  /// [`SystemInfo::block_extract`] set to [false].
   pub fn new(library_name: &'static CUtf8, library_version: &'static CUtf8, valid_extensions: Extensions) -> Self {
     Self(retro_system_info {
       library_name: library_name.as_ptr(),
@@ -65,8 +65,8 @@ impl RetroSystemInfo {
   }
 }
 
-impl From<RetroSystemInfo> for retro_system_info {
-  fn from(info: RetroSystemInfo) -> Self {
+impl From<SystemInfo> for retro_system_info {
+  fn from(info: SystemInfo) -> Self {
     info.into_inner()
   }
 }

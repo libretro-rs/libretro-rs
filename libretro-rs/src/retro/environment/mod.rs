@@ -9,22 +9,22 @@ pub use convert::*;
 pub use newtypes::*;
 pub use null_environment::*;
 
-/// Exposes the [retro_environment_t] callback in an idiomatic fashion.
+/// Exposes the [`retro_environment_t`] callback in an idiomatic fashion.
 /// Each of the `RETRO_ENVIRONMENT_*` keys will eventually have a corresponding method here.
 ///
-/// Until that is accomplished, the keys are available in [libretro_rs::sys] and can be used
+/// Until that is accomplished, the keys are available in [`libretro_rs::ffi`] and can be used
 /// manually with the various `*_raw` methods.
-pub trait RetroEnvironment: Sized {
+pub trait Environment: Sized {
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
   /// Returns `Some(T)` iff the command succeeds.
   ///
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
+  /// See [EnvironmentData] for more information about type requirements.
   unsafe fn get_raw<T, U>(&self, cmd: impl Into<u32>) -> T
   where
-    T: RetroEnvironmentResult<Source = U>,
-    U: Default + RetroEnvironmentData,
+    T: EnvironmentResult<Source = U>,
+    U: Default + EnvironmentData,
   {
     self.parameterized_get_raw(cmd, U::default())
   }
@@ -36,10 +36,10 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
+  /// See [EnvironmentData] for more information about type requirements.
   unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T::Source>) -> T
   where
-    T: RetroEnvironmentResult;
+    T: EnvironmentResult;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   ///
@@ -47,15 +47,15 @@ pub trait RetroEnvironment: Sized {
   /// The environment command **must not** modify `data`.
   ///
   /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
-  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl RetroEnvironmentData) -> bool;
+  /// See [EnvironmentData] for more information about type requirements.
+  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl EnvironmentData) -> bool;
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
-  /// Equivalent to [RetroEnvironment::set_raw] with `&()`.
+  /// Equivalent to [Environment::set_raw] with `&()`.
   ///
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
+  /// See [EnvironmentData] for more information about type requirements.
   unsafe fn cmd_raw(&mut self, cmd: impl Into<u32>) -> bool {
     self.set_raw(cmd, &())
   }
@@ -67,10 +67,10 @@ pub trait RetroEnvironment: Sized {
   ///
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
-  /// See [RetroEnvironmentData] for more information about type requirements.
+  /// See [EnvironmentData] for more information about type requirements.
   unsafe fn parameterized_cmd_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T::Source>) -> T
   where
-    T: RetroEnvironmentResult;
+    T: EnvironmentResult;
 
   /// Sets screen rotation of graphics.
   fn set_rotation(&mut self, rotation: ScreenRotation) -> bool {
@@ -91,9 +91,9 @@ pub trait RetroEnvironment: Sized {
 
   /// Sets a message to be displayed in implementation-specific manner for a
   /// certain amount of 'frames'. Should not be used for trivial messages,
-  /// which should simply be logged via [RetroEnvironment::get_log_interface]
+  /// which should simply be logged via [Environment::get_log_interface]
   /// (or as a fallback, stderr).
-  fn set_message(&mut self, message: impl Into<RetroMessage>) -> bool {
+  fn set_message(&mut self, message: impl Into<Message>) -> bool {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_MESSAGE, &message.into()) }
   }
 
@@ -142,50 +142,50 @@ pub trait RetroEnvironment: Sized {
   }
 }
 
-pub trait SetEnvironmentEnvironment: RetroEnvironment {
+pub trait SetEnvironmentEnvironment: Environment {
   fn set_support_no_game(&mut self, data: bool) -> bool {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &data) }
   }
 }
-impl<T> SetEnvironmentEnvironment for T where T: RetroEnvironment {}
+impl<T> SetEnvironmentEnvironment for T where T: Environment {}
 
-pub trait InitEnvironment: RetroEnvironment {}
-impl<T> InitEnvironment for T where T: RetroEnvironment {}
+pub trait InitEnvironment: Environment {}
+impl<T> InitEnvironment for T where T: Environment {}
 
-pub trait SetPortDeviceEnvironment: RetroEnvironment {}
-impl<T> SetPortDeviceEnvironment for T where T: RetroEnvironment {}
+pub trait SetPortDeviceEnvironment: Environment {}
+impl<T> SetPortDeviceEnvironment for T where T: Environment {}
 
-pub trait ResetEnvironment: RetroEnvironment {}
-impl<T> ResetEnvironment for T where T: RetroEnvironment {}
+pub trait ResetEnvironment: Environment {}
+impl<T> ResetEnvironment for T where T: Environment {}
 
-pub trait RunEnvironment: RetroEnvironment {
+pub trait RunEnvironment: Environment {
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   fn shutdown(&mut self) -> bool {
     unsafe { self.cmd_raw(RETRO_ENVIRONMENT_SHUTDOWN) }
   }
 
-  fn set_geometry(&mut self, geometry: RetroGameGeometry) -> bool {
+  fn set_geometry(&mut self, geometry: GameGeometry) -> bool {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry) }
   }
 }
-impl<T> RunEnvironment for T where T: RetroEnvironment {}
+impl<T> RunEnvironment for T where T: Environment {}
 
-pub trait SerializeSizeEnvironment: RetroEnvironment {}
-impl<T> SerializeSizeEnvironment for T where T: RetroEnvironment {}
+pub trait SerializeSizeEnvironment: Environment {}
+impl<T> SerializeSizeEnvironment for T where T: Environment {}
 
-pub trait SerializeEnvironment: RetroEnvironment {}
-impl<T> SerializeEnvironment for T where T: RetroEnvironment {}
+pub trait SerializeEnvironment: Environment {}
+impl<T> SerializeEnvironment for T where T: Environment {}
 
-pub trait UnserializeEnvironment: RetroEnvironment {}
-impl<T> UnserializeEnvironment for T where T: RetroEnvironment {}
+pub trait UnserializeEnvironment: Environment {}
+impl<T> UnserializeEnvironment for T where T: Environment {}
 
-pub trait CheatResetEnvironment: RetroEnvironment {}
-impl<T> CheatResetEnvironment for T where T: RetroEnvironment {}
+pub trait CheatResetEnvironment: Environment {}
+impl<T> CheatResetEnvironment for T where T: Environment {}
 
-pub trait CheatSetEnvironment: RetroEnvironment {}
-impl<T> CheatSetEnvironment for T where T: RetroEnvironment {}
+pub trait CheatSetEnvironment: Environment {}
+impl<T> CheatSetEnvironment for T where T: Environment {}
 
-pub trait LoadGameEnvironment: RetroEnvironment {
+pub trait LoadGameEnvironment: Environment {
   /// Gives a hint to the frontend how demanding this implementation is on a system. E.g. Reporting
   /// a level of 2 means this implementation should run decently on all frontends of level 2 and up.
   ///
@@ -203,34 +203,34 @@ pub trait LoadGameEnvironment: RetroEnvironment {
   /// The default pixel format is RETRO_PIXEL_FORMAT_0RGB1555.
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
   /// If the call returns false, the frontend does not support this pixel format.
-  fn set_pixel_format(&mut self, format: RetroPixelFormat) -> bool {
+  fn set_pixel_format(&mut self, format: PixelFormat) -> bool {
     GetSystemAvInfoEnvironment::set_pixel_format(self, format)
   }
 }
-impl<T> LoadGameEnvironment for T where T: RetroEnvironment {}
+impl<T> LoadGameEnvironment for T where T: Environment {}
 
-pub trait GetSystemAvInfoEnvironment: RetroEnvironment {
+pub trait GetSystemAvInfoEnvironment: Environment {
   /// Sets the internal pixel format used by the implementation.
   /// The default pixel format is RETRO_PIXEL_FORMAT_0RGB1555.
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
   /// If the call returns false, the frontend does not support this pixel format.
-  fn set_pixel_format(&mut self, format: RetroPixelFormat) -> bool {
+  fn set_pixel_format(&mut self, format: PixelFormat) -> bool {
     unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format) }
   }
 }
-impl<T> GetSystemAvInfoEnvironment for T where T: RetroEnvironment {}
+impl<T> GetSystemAvInfoEnvironment for T where T: Environment {}
 
-pub trait GetRegionEnvironment: RetroEnvironment {}
-impl<T> GetRegionEnvironment for T where T: RetroEnvironment {}
+pub trait GetRegionEnvironment: Environment {}
+impl<T> GetRegionEnvironment for T where T: Environment {}
 
-pub trait LoadGameSpecialEnvironment: RetroEnvironment {}
-impl<T> LoadGameSpecialEnvironment for T where T: RetroEnvironment {}
+pub trait LoadGameSpecialEnvironment: Environment {}
+impl<T> LoadGameSpecialEnvironment for T where T: Environment {}
 
-pub trait UnloadGameEnvironment: RetroEnvironment {}
-impl<T> UnloadGameEnvironment for T where T: RetroEnvironment {}
+pub trait UnloadGameEnvironment: Environment {}
+impl<T> UnloadGameEnvironment for T where T: Environment {}
 
-pub trait GetMemoryDataEnvironment: RetroEnvironment {}
-impl<T> GetMemoryDataEnvironment for T where T: RetroEnvironment {}
+pub trait GetMemoryDataEnvironment: Environment {}
+impl<T> GetMemoryDataEnvironment for T where T: Environment {}
 
-pub trait GetMemorySizeEnvironment: RetroEnvironment {}
-impl<T> GetMemorySizeEnvironment for T where T: RetroEnvironment {}
+pub trait GetMemorySizeEnvironment: Environment {}
+impl<T> GetMemorySizeEnvironment for T where T: Environment {}
