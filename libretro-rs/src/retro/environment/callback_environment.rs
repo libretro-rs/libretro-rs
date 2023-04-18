@@ -1,4 +1,4 @@
-use crate::*;
+use crate::retro::*;
 
 pub type EnvironmentCallback = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
 

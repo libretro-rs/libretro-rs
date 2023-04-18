@@ -1,5 +1,5 @@
 use crate::ffi::*;
-use crate::*;
+use crate::retro::*;
 use c_utf8::CUtf8;
 use core::ffi::*;
 

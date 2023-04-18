@@ -7,7 +7,7 @@ macro_rules! libretro_core {
       use core::ffi::c_char;
       use core::ffi::*;
       use libretro_rs::ffi::*;
-      use libretro_rs::*;
+      use libretro_rs::retro::*;
 
       static mut RETRO_INSTANCE: RetroInstance<$core> = RetroInstance {
         environment: None,

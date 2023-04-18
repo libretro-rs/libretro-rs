@@ -1,7 +1,8 @@
 use crate::*;
 
 use libretro_rs::c_utf8::c_utf8;
-use libretro_rs::*;
+use libretro_rs::retro::*;
+use libretro_rs::{extensions, libretro_core};
 
 pub struct LibretroCore {
   cpu: cpu::Cpu,

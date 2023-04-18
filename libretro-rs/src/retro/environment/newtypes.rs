@@ -1,4 +1,4 @@
-use crate::*;
+use crate::retro::*;
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
