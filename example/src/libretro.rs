@@ -1,5 +1,6 @@
 use crate::*;
 
+use libretro_rs::c_utf8::c_utf8;
 use libretro_rs::*;
 
 pub struct LibretroCore {
@@ -66,10 +67,10 @@ fn key_to_retro_button(key: keyboard::Key) -> RetroJoypadButton {
 
 impl RetroCore for LibretroCore {
   fn get_system_info() -> RetroSystemInfo {
-    RetroSystemInfo::new("chip8.rs", env!("CARGO_PKG_VERSION"))
+    RetroSystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions!["png"])
   }
 
-  fn load_game(_env: &mut RetroEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
+  fn load_game(_env: &mut impl LoadGameEnvironment, game: RetroGame) -> RetroLoadGameResult<Self> {
     match game {
       RetroGame::Data { data, .. } => {
         let core = LibretroCore {
@@ -83,7 +84,7 @@ impl RetroCore for LibretroCore {
     }
   }
 
-  fn get_system_av_info(&self, env: &mut RetroEnvironment) -> RetroSystemAVInfo {
+  fn get_system_av_info(&self, env: &mut impl GetSystemAvInfoEnvironment) -> RetroSystemAVInfo {
     const WINDOW_SCALE: u16 = 8;
     const WINDOW_WIDTH: u16 = WINDOW_SCALE * display::WIDTH as u16;
     const WINDOW_HEIGHT: u16 = WINDOW_SCALE * display::HEIGHT as u16;
@@ -91,11 +92,11 @@ impl RetroCore for LibretroCore {
     RetroSystemAVInfo::default_timings(RetroGameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
   }
 
-  fn reset(&mut self, _env: &mut RetroEnvironment) {
+  fn reset(&mut self, _env: &mut impl ResetEnvironment) {
     todo!()
   }
 
-  fn run(&mut self, _env: &mut RetroEnvironment, runtime: &RetroRuntime) {
+  fn run(&mut self, _env: &mut impl RunEnvironment, runtime: &RetroRuntime) {
     self.update_input(runtime);
 
     self.cpu.step_for(25);
