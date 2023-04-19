@@ -1,25 +1,32 @@
+use crate::prelude::*;
 use crate::retro::environment::convert::*;
-use crate::retro::*;
+use crate::retro::environment::Result;
 
 /// A [Environment] that doesn't implement any commands. Useful for testing.
 pub struct NullEnvironment;
 
 impl Environment for NullEnvironment {
-  unsafe fn parameterized_get_raw<T>(&self, _cmd: impl Into<u32>, _data: impl Into<T::Source>) -> T
+  unsafe fn parameterized_get_raw<C, D>(&self, _cmd: C, _data: &mut D) -> Result<()>
   where
-    T: EnvironmentResult,
+    C: Into<u32>,
+    D: CommandData,
   {
-    T::unsafe_from(None)
+    Err(CommandError::new())
   }
 
-  unsafe fn set_raw(&mut self, _cmd: impl Into<u32>, _data: &impl EnvironmentData) -> bool {
-    false
+  unsafe fn set_raw<C, D>(&mut self, _cmd: C, _data: &D) -> Result<()>
+  where
+    C: Into<u32>,
+    D: CommandData,
+  {
+    Err(CommandError::new())
   }
 
-  unsafe fn parameterized_cmd_raw<T>(&mut self, _cmd: impl Into<u32>, _data: impl Into<T::Source>) -> T
+  unsafe fn parameterized_cmd_raw<C, D>(&mut self, _cmd: C, _data: &mut D) -> Result<()>
   where
-    T: EnvironmentResult,
+    C: Into<u32>,
+    D: CommandData,
   {
-    T::unsafe_from(None)
+    Err(CommandError::new())
   }
 }

@@ -10,7 +10,7 @@ pub enum ScreenRotation {
   TwoSeventyDegrees = 3,
 }
 
-impl EnvironmentData for ScreenRotation {}
+impl CommandData for ScreenRotation {}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -33,7 +33,13 @@ impl Message {
   }
 }
 
-impl EnvironmentData for Message {}
+impl From<Message> for retro_message {
+  fn from(value: Message) -> Self {
+    value.0
+  }
+}
+
+impl CommandData for Message {}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]

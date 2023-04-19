@@ -40,7 +40,7 @@ where
   }
 }
 
-type RetroPrintF = unsafe extern "C" fn(level: retro_log_level, fmt: *const c_char, ...);
+pub type RetroPrintF = unsafe extern "C" fn(level: retro_log_level, fmt: *const c_char, ...);
 
 /// The platform-specific [Logger] provided by [RetroEnvironment::get_log_interface].
 #[repr(transparent)]

@@ -1,5 +1,6 @@
 use crate::ffi::*;
-use crate::retro::*;
+use crate::prelude::*;
+use core::ffi::{c_char, c_uint, CStr};
 
 /// This is the glue layer between a [Core] and the `libretro` API.
 #[doc(hidden)]
@@ -81,7 +82,7 @@ impl<T: Core> Instance<T> {
     if let Ok(device) = device.try_into() {
       if let Ok(port_num) = u8::try_from(port) {
         let mut env = self.environment();
-        let port = DevicePort(port_num);
+        let port = DevicePort::new(port_num);
         self.core_mut(|core| core.set_controller_port_device(&mut env, port, device))
       }
     }
@@ -250,7 +251,7 @@ macro_rules! libretro_core {
       use core::ffi::c_char;
       use core::ffi::*;
       use libretro_rs::ffi::*;
-      use libretro_rs::retro::*;
+      use libretro_rs::prelude::*;
 
       static mut RETRO_INSTANCE: Instance<$core> = Instance {
         environment: None,

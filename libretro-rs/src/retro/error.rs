@@ -1,5 +1,5 @@
+use core::fmt::{Display, Formatter};
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 
 macro_rules! retro_error {
   ($name:ident, $description:expr) => {
@@ -13,7 +13,7 @@ macro_rules! retro_error {
     }
 
     impl Display for $name {
-      fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+      fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         write!(f, $description)
       }
     }
@@ -25,3 +25,10 @@ macro_rules! retro_error {
 retro_error!(LoadGameError, "failed to load game");
 retro_error!(SerializeError, "failed to serialize state");
 retro_error!(UnserializeError, "failed to unserialize state");
+retro_error!(CommandError, "failed to execute environment command");
+
+impl From<CommandError> for LoadGameError {
+  fn from(_value: CommandError) -> Self {
+    Self::default()
+  }
+}

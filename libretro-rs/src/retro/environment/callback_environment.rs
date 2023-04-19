@@ -1,35 +1,55 @@
-use crate::retro::*;
+use crate::prelude::*;
+use crate::retro::environment::Result;
+use core::ffi::c_void;
 
 pub type EnvironmentCallback = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
 
 impl Environment for EnvironmentCallback {
-  unsafe fn parameterized_get_raw<T>(&self, cmd: impl Into<u32>, data: impl Into<T::Source>) -> T
+  unsafe fn parameterized_get_raw<C, D>(&self, cmd: C, data: &mut D) -> Result<()>
   where
-    T: EnvironmentResult,
+    C: Into<u32>,
+    D: CommandData,
   {
-    get_option_from_callback(self, cmd, data.into())
+    callback_mut(self, cmd, data)
   }
 
-  unsafe fn set_raw(&mut self, cmd: impl Into<u32>, data: &impl EnvironmentData) -> bool {
-    self(cmd.into(), data as *const _ as *mut c_void)
+  unsafe fn set_raw<C, D>(&mut self, cmd: C, data: &D) -> Result<()>
+  where
+    C: Into<u32>,
+    D: CommandData,
+  {
+    callback(self, cmd, data)
   }
 
-  unsafe fn parameterized_cmd_raw<T>(&mut self, cmd: impl Into<u32>, data: impl Into<T::Source>) -> T
+  unsafe fn parameterized_cmd_raw<C, D>(&mut self, cmd: C, data: &mut D) -> Result<()>
   where
-    T: EnvironmentResult,
+    C: Into<u32>,
+    D: CommandData,
   {
-    get_option_from_callback(self, cmd, data.into())
+    callback_mut(self, cmd, data)
   }
 }
 
-unsafe fn get_option_from_callback<T, U>(cb: &EnvironmentCallback, cmd: impl Into<u32>, mut data: U) -> T
+unsafe fn callback<C, D>(cb: &EnvironmentCallback, cmd: C, data: &D) -> Result<()>
 where
-  T: EnvironmentResult<Source = U>,
-  U: EnvironmentData,
+  C: Into<u32>,
+  D: CommandData,
 {
-  T::unsafe_from(if cb(cmd.into(), &mut data as *mut _ as *mut c_void) {
-    Some(data)
+  if cb(cmd.into(), data as *const _ as *mut c_void) {
+    Ok(())
   } else {
-    None
-  })
+    Err(CommandError::new())
+  }
+}
+
+unsafe fn callback_mut<C, D>(cb: &EnvironmentCallback, cmd: C, data: &mut D) -> Result<()>
+where
+  C: Into<u32>,
+  D: CommandData,
+{
+  if cb(cmd.into(), data as *mut _ as *mut c_void) {
+    Ok(())
+  } else {
+    Err(CommandError::new())
+  }
 }

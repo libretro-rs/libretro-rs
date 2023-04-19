@@ -1,7 +1,7 @@
 use crate::*;
 
 use libretro_rs::c_utf8::c_utf8;
-use libretro_rs::retro::*;
+use libretro_rs::prelude::*;
 use libretro_rs::{extensions, libretro_core};
 
 pub struct LibretroCore {
@@ -71,7 +71,8 @@ impl Core for LibretroCore {
     SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions!["png"])
   }
 
-  fn load_game(_env: &mut impl LoadGameEnvironment, game: Game) -> Result<Self, LoadGameError> {
+  fn load_game(env: &mut impl LoadGameEnvironment, game: Game) -> Result<Self, LoadGameError> {
+    env.set_pixel_format(PixelFormat::XRGB8888)?;
     match game {
       Game::Data { data, .. } => {
         let core = LibretroCore {
@@ -85,11 +86,10 @@ impl Core for LibretroCore {
     }
   }
 
-  fn get_system_av_info(&self, env: &mut impl GetSystemAvInfoEnvironment) -> SystemAVInfo {
+  fn get_system_av_info(&self, _env: &mut impl GetSystemAvInfoEnvironment) -> SystemAVInfo {
     const WINDOW_SCALE: u16 = 8;
     const WINDOW_WIDTH: u16 = WINDOW_SCALE * display::WIDTH as u16;
     const WINDOW_HEIGHT: u16 = WINDOW_SCALE * display::HEIGHT as u16;
-    env.set_pixel_format(PixelFormat::XRGB8888);
     SystemAVInfo::default_timings(GameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
   }
 
