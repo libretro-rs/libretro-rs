@@ -10,8 +10,6 @@ pub enum ScreenRotation {
   TwoSeventyDegrees = 3,
 }
 
-impl CommandData for ScreenRotation {}
-
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Message(retro_message);
@@ -38,8 +36,6 @@ impl From<Message> for retro_message {
     value.0
   }
 }
-
-impl CommandData for Message {}
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]

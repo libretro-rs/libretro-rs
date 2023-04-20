@@ -347,6 +347,12 @@ pub enum PixelFormat {
   RGB565 = 2,
 }
 
+impl Into<c_int> for PixelFormat {
+  fn into(self) -> c_int {
+    self as c_int
+  }
+}
+
 pub struct Runtime {
   audio_sample: retro_audio_sample_t,
   audio_sample_batch: retro_audio_sample_batch_t,

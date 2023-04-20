@@ -6,26 +6,29 @@ use crate::retro::environment::Result;
 pub struct NullEnvironment;
 
 impl Environment for NullEnvironment {
-  unsafe fn parameterized_get_raw<C, D>(&self, _cmd: C, _data: &mut D) -> Result<()>
+  unsafe fn parameterized_get_raw<C, D, R>(&self, _cmd: C, _data: D) -> Result<R>
   where
     C: Into<u32>,
-    D: CommandData,
+    D: Into<R>,
+    R: CommandData,
   {
     Err(CommandError::new())
   }
 
-  unsafe fn set_raw<C, D>(&mut self, _cmd: C, _data: &D) -> Result<()>
+  unsafe fn set_raw<C, D, R>(&mut self, _cmd: C, _data: &D) -> Result<()>
   where
     C: Into<u32>,
-    D: CommandData,
+    D: core::borrow::Borrow<R>,
+    R: CommandData,
   {
     Err(CommandError::new())
   }
 
-  unsafe fn parameterized_cmd_raw<C, D>(&mut self, _cmd: C, _data: &mut D) -> Result<()>
+  unsafe fn parameterized_cmd_raw<C, D, R>(&mut self, _cmd: C, _data: &mut D) -> Result<()>
   where
     C: Into<u32>,
-    D: CommandData,
+    D: core::borrow::BorrowMut<R>,
+    R: CommandData,
   {
     Err(CommandError::new())
   }

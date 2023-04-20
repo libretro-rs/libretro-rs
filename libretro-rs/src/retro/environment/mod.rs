@@ -18,37 +18,17 @@ pub type Result<T> = core::result::Result<T, CommandError>;
 /// Until that is accomplished, the keys are available in [`libretro_rs::ffi`] and can be used
 /// manually with the various `*_raw` methods.
 pub trait Environment: Sized {
-  unsafe fn get<C, D, R>(&self, cmd: C) -> Result<R>
-  where
-    C: Into<u32>,
-    D: CommandData + Default,
-    R: CommandOutput<Source = D>,
-  {
-    self.get_raw::<C, D>(cmd).map(|data| R::unsafe_from(data))
-  }
-
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
   ///
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [CommandData] for more information about type requirements.
-  unsafe fn get_raw<C, D>(&self, cmd: C) -> Result<D>
+  unsafe fn get_raw<C, R>(&self, cmd: C) -> Result<R>
   where
     C: Into<u32>,
-    D: Default + CommandData,
+    R: Default + CommandData,
   {
-    let mut data = D::default();
-    self.parameterized_get_raw(cmd, &mut data).map(|_| data)
-  }
-
-  unsafe fn parameterized_get<C, D, R>(&self, cmd: C, data: D) -> Result<R>
-  where
-    C: Into<u32>,
-    D: Into<R::Source>,
-    R: CommandOutput,
-  {
-    let mut data: R::Source = data.into();
-    self.parameterized_get_raw(cmd, &mut data).map(|_| R::unsafe_from(data))
+    self.parameterized_get_raw(cmd, R::default())
   }
 
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
@@ -58,10 +38,11 @@ pub trait Environment: Sized {
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [CommandData] for more information about type requirements.
-  unsafe fn parameterized_get_raw<C, D>(&self, cmd: C, data: &mut D) -> Result<()>
+  unsafe fn parameterized_get_raw<C, D, R>(&self, cmd: C, data: D) -> Result<R>
   where
     C: Into<u32>,
-    D: CommandData;
+    D: Into<R>,
+    R: CommandData;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   ///
@@ -70,10 +51,11 @@ pub trait Environment: Sized {
   ///
   /// See `libretro.h` for the requirements of environment commands.
   /// See [CommandData] for more information about type requirements.
-  unsafe fn set_raw<C, D>(&mut self, cmd: C, data: &D) -> Result<()>
+  unsafe fn set_raw<C, D, R>(&mut self, cmd: C, data: &D) -> Result<()>
   where
     C: Into<u32>,
-    D: CommandData;
+    D: core::borrow::Borrow<R>,
+    R: CommandData;
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
   /// Equivalent to [Environment::set_raw] with `&()`.
@@ -88,11 +70,11 @@ pub trait Environment: Sized {
   unsafe fn parameterized_cmd<C, D, R>(&mut self, cmd: C, data: D) -> Result<R>
   where
     C: Into<u32>,
-    D: Into<R::Source>,
-    R: CommandOutput,
+    D: Into<R>,
+    R: CommandData,
   {
     let mut data = data.into();
-    self.parameterized_cmd_raw(cmd, &mut data).map(|_| R::unsafe_from(data))
+    self.parameterized_cmd_raw(cmd, &mut data).map(|_| data)
   }
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
@@ -103,17 +85,18 @@ pub trait Environment: Sized {
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [CommandData] for more information about type requirements.
-  unsafe fn parameterized_cmd_raw<C, D>(&mut self, cmd: C, data: &mut D) -> Result<()>
+  unsafe fn parameterized_cmd_raw<C, D, R>(&mut self, cmd: C, data: &mut D) -> Result<()>
   where
     C: Into<u32>,
-    D: CommandData,
+    D: core::borrow::BorrowMut<R>,
+    R: CommandData,
   {
-    self.set_raw(cmd, data)
+    self.set_raw(cmd, data.borrow_mut())
   }
 
   /// Sets screen rotation of graphics.
   fn set_rotation(&mut self, rotation: ScreenRotation) -> Result<()> {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_ROTATION, &rotation) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_ROTATION, &(rotation as u32)) }
   }
 
   #[cfg(deprecated)]
@@ -139,17 +122,17 @@ pub trait Environment: Sized {
 
   /// Queries the path where the current libretro core resides.
   fn get_libretro_path(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_LIBRETRO_PATH).unsafe_into() }
   }
 
   /// Queries the path of the "core assets" directory.
   fn get_core_assets_directory(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY).unsafe_into() }
   }
 
   /// Queries the path of the save directory.
   fn get_save_directory(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY).unsafe_into() }
   }
 
   /// Returns the "system" directory of the frontend. This directory can be used to store system
@@ -161,16 +144,20 @@ pub trait Environment: Sized {
   /// a better place to put it. This is now discouraged, and if possible, cores should try to use
   /// the new GET_SAVE_DIRECTORY.
   fn get_system_directory(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY).unsafe_into() }
   }
 
   fn get_variable(&self, key: &impl AsRef<CStr>) -> Result<RetroVariable> {
-    unsafe { self.parameterized_get(RETRO_ENVIRONMENT_GET_VARIABLE, key.as_ref()) }
+    unsafe {
+      self
+        .parameterized_get_raw(RETRO_ENVIRONMENT_GET_VARIABLE, key.as_ref())
+        .unsafe_into()
+    }
   }
 
   /// Queries the username associated with the frontend.
   fn get_username(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_USERNAME) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_USERNAME).unsafe_into() }
   }
 
   /// Gets an interface for logging. This is useful for logging in a cross-platform way as certain
@@ -178,7 +165,7 @@ pub trait Environment: Sized {
   /// information in a more suitable way. If this interface is not used, libretro cores should log
   /// to [std::io::Stderr] (via [eprintln], [StderrLogger] or [FallbackLogger]) as desired.
   fn get_log_interface(&self) -> Result<PlatformLogger> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_LOG_INTERFACE) }
+    unsafe { self.get_raw(RETRO_ENVIRONMENT_GET_LOG_INTERFACE).unsafe_into() }
   }
 }
 
@@ -256,7 +243,7 @@ pub trait GetSystemAvInfoEnvironment: Environment {
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
   /// If the call returns false, the frontend does not support this pixel format.
   fn set_pixel_format(&mut self, format: PixelFormat) -> Result<()> {
-    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format) }
+    unsafe { self.set_raw(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &(format as i32)) }
   }
 }
 impl<T> GetSystemAvInfoEnvironment for T where T: Environment {}

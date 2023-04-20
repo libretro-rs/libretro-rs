@@ -7,65 +7,71 @@ use core::ffi::*;
 ///
 /// Any type implementing this trait must be FFI-safe. Structs should be `#[repr(C)]` or a
 /// `#[repr(transparent)]` newtype. Numeric enums should have the appropriate primitive
-/// representation, which is typically either `#[repr(u32)]` for `const unsigned` arguments or
-/// `#[repr(i32)]` for `const enum` arguments.
+/// representation, which is typically either `#[repr(core::ffi::c_uint)]` for
+/// `const unsigned` arguments or `#[repr(core::ffi::c_int)]` for `const enum` arguments.
 ///
 /// Care must still be taken when calling any of the generic unsafe `[RetroEnvironment]` methods to
 /// ensure the type used is appropriate for the environment command, as specified in `libretro.h`.
 pub trait CommandData {}
 impl CommandData for () {}
 impl CommandData for bool {}
+impl CommandData for c_int {}
+impl CommandData for c_uint {}
 impl CommandData for Option<&c_char> {}
+impl CommandData for Option<&c_void> {}
 impl CommandData for retro_hw_render_callback {}
-impl CommandData for retro_log_callback {}
-impl CommandData for PixelFormat {}
 impl CommandData for retro_game_geometry {}
-impl CommandData for retro_variable {}
+impl CommandData for retro_log_callback {}
 impl CommandData for retro_message {}
-impl CommandData for u32 {}
+impl CommandData for retro_variable {}
 
 /// Unsafe type conversions.
-pub trait CommandOutput {
-  type Source: CommandData;
-  unsafe fn unsafe_from(x: Self::Source) -> Self;
+pub trait UnsafeFrom<T> {
+  unsafe fn unsafe_from(x: T) -> Self;
 }
 
-impl CommandOutput for bool {
-  type Source = bool;
+pub trait UnsafeInto<T> {
+  unsafe fn unsafe_into(self) -> T;
+}
 
-  unsafe fn unsafe_from(x: Self::Source) -> Self {
-    x
+impl<T, U, E> UnsafeFrom<Result<U, E>> for Result<T, E>
+where
+  T: UnsafeFrom<U>,
+{
+  unsafe fn unsafe_from(x: Result<U, E>) -> Self {
+    x.map(|ok| T::unsafe_from(ok))
   }
 }
 
-impl<'a> CommandOutput for Option<&'a CStr> {
-  type Source = Option<&'a c_char>;
-
-  unsafe fn unsafe_from(option: Self::Source) -> Self {
-    option.map(|ptr| CStr::from_ptr(ptr))
+impl<T, U> UnsafeInto<U> for T
+where
+  U: UnsafeFrom<T>,
+{
+  unsafe fn unsafe_into(self) -> U {
+    U::unsafe_from(self)
   }
 }
 
-impl<'a> CommandOutput for Option<&'a CUtf8> {
-  type Source = Option<&'a c_char>;
-
-  unsafe fn unsafe_from(option: Self::Source) -> Self {
-    option.map(|ptr| CUtf8::from_c_str_unchecked(CStr::from_ptr(ptr)))
+impl<'a> UnsafeFrom<Option<&'a c_char>> for Option<&'a CStr> {
+  unsafe fn unsafe_from(str: Option<&'a c_char>) -> Self {
+    str.map(|ptr| CStr::from_ptr(ptr))
   }
 }
 
-impl CommandOutput for PlatformLogger {
-  type Source = retro_log_callback;
-
-  unsafe fn unsafe_from(x: Self::Source) -> Self {
-    PlatformLogger::new(x.log.unwrap())
+impl<'a> UnsafeFrom<Option<&'a c_char>> for Option<&'a CUtf8> {
+  unsafe fn unsafe_from(str: Option<&'a c_char>) -> Self {
+    str.map(|ptr| CUtf8::from_c_str_unchecked(CStr::from_ptr(ptr)))
   }
 }
 
-impl<'a> CommandOutput for RetroVariable<'a> {
-  type Source = retro_variable;
+impl UnsafeFrom<retro_log_callback> for PlatformLogger {
+  unsafe fn unsafe_from(cb: retro_log_callback) -> Self {
+    PlatformLogger::new(cb.log.unwrap())
+  }
+}
 
-  unsafe fn unsafe_from(x: Self::Source) -> Self {
-    Self(x.value.as_ref().map(|ptr| CStr::from_ptr(ptr)))
+impl<'a> UnsafeFrom<retro_variable> for RetroVariable<'a> {
+  unsafe fn unsafe_from(var: retro_variable) -> Self {
+    Self(var.value.as_ref().map(|ptr| CStr::from_ptr(ptr)))
   }
 }
