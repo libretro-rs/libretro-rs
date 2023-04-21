@@ -46,7 +46,7 @@ impl<T: Core> Instance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_set_environment` API call.
-  pub fn on_set_environment(&mut self, mut env: EnvironmentCallback) {
+  pub fn on_set_environment(&mut self, mut env: EnvironmentPtr) {
     T::set_environment(&mut env);
 
     self.environment = Some(env);
@@ -209,7 +209,7 @@ impl<T: Core> Instance<T> {
 
   #[inline]
   #[doc(hidden)]
-  fn environment(&self) -> EnvironmentCallback {
+  fn environment(&self) -> EnvironmentPtr {
     self.environment.expect("unable to retrieve the environment callback")
   }
 
@@ -289,7 +289,7 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_set_environment(cb: EnvironmentCallback) {
+      extern "C" fn retro_set_environment(cb: EnvironmentPtr) {
         instance_mut(|instance| instance.on_set_environment(cb))
       }
 

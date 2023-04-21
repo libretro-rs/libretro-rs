@@ -337,7 +337,6 @@ impl From<Region> for c_uint {
   }
 }
 
-#[repr(i32)]
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum PixelFormat {
@@ -347,9 +346,9 @@ pub enum PixelFormat {
   RGB565 = 2,
 }
 
-impl Into<c_int> for PixelFormat {
-  fn into(self) -> c_int {
-    self as c_int
+impl From<PixelFormat> for c_int {
+  fn from(value: PixelFormat) -> Self {
+    value as c_int
   }
 }
 

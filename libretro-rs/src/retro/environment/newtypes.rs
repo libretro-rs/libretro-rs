@@ -1,6 +1,5 @@
 use crate::retro::*;
 
-#[repr(u32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ScreenRotation {
   #[default]
@@ -8,6 +7,12 @@ pub enum ScreenRotation {
   NinetyDegrees = 1,
   OneEightyDegrees = 2,
   TwoSeventyDegrees = 3,
+}
+
+impl From<ScreenRotation> for c_uint {
+  fn from(value: ScreenRotation) -> Self {
+    value as c_uint
+  }
 }
 
 #[repr(transparent)]

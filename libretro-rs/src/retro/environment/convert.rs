@@ -21,8 +21,12 @@ impl CommandData for Option<&c_char> {}
 impl CommandData for Option<&c_void> {}
 impl CommandData for retro_hw_render_callback {}
 impl CommandData for retro_game_geometry {}
+impl CommandData for GameGeometry {}
 impl CommandData for retro_log_callback {}
 impl CommandData for retro_message {}
+impl CommandData for Message {}
+impl CommandData for retro_system_av_info {}
+impl CommandData for SystemAVInfo {}
 impl CommandData for retro_variable {}
 
 /// Unsafe type conversions.

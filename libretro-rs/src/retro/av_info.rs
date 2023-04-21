@@ -40,12 +40,6 @@ impl AsRef<retro_system_av_info> for SystemAVInfo {
   }
 }
 
-impl AsMut<retro_system_av_info> for SystemAVInfo {
-  fn as_mut(&mut self) -> &mut retro_system_av_info {
-    &mut self.0
-  }
-}
-
 impl From<SystemAVInfo> for retro_system_av_info {
   fn from(av_info: SystemAVInfo) -> Self {
     av_info.into_inner()
