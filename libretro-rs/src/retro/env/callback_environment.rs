@@ -1,12 +1,13 @@
 use crate::prelude::*;
 use crate::retro::environment::Result;
 use core::ffi::c_void;
+use env::{CommandData, EnvironmentCallback, Result};
 
 pub type EnvironmentPtr = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
 
 impl EnvironmentCallback for EnvironmentPtr {
   unsafe fn get(&self, cmd: u32, data: &mut impl CommandData) -> Result<()> {
-    callback_mut(self, cmd, data)
+    callback_mut(*self, cmd, data)
   }
 
   unsafe fn set(&mut self, cmd: u32, data: &impl CommandData) -> Result<()> {
@@ -14,7 +15,7 @@ impl EnvironmentCallback for EnvironmentPtr {
   }
 
   unsafe fn cmd(&mut self, cmd: u32, data: &mut impl CommandData) -> Result<()> {
-    callback_mut(self, cmd, data)
+    callback_mut(*self, cmd, data)
   }
 }
 
@@ -30,7 +31,7 @@ where
   }
 }
 
-unsafe fn callback_mut<C, D>(cb: &EnvironmentPtr, cmd: C, data: &mut D) -> Result<()>
+unsafe fn callback_mut<C, D>(cb: EnvironmentPtr, cmd: C, data: &mut D) -> Result<()>
 where
   C: Into<u32>,
   D: CommandData,

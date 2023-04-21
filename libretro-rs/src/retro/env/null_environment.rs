@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::retro::environment::convert::*;
 use crate::retro::environment::Result;
+use env::{CommandData, EnvironmentCallback, Result};
 
 /// A [Environment] that doesn't implement any commands. Useful for testing.
 pub struct NullEnvironment;

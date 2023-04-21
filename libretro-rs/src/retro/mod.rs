@@ -3,7 +3,7 @@ extern crate core;
 pub mod av_info;
 pub mod convert;
 pub mod core_macro;
-pub mod environment;
+pub mod env;
 pub mod error;
 pub mod extensions;
 pub mod logger;
@@ -21,69 +21,65 @@ use std::result::Result;
 #[allow(unused_variables)]
 pub trait Core: Sized {
   /// Called during `retro_set_environment`.
-  fn set_environment(env: &mut impl SetEnvironmentEnvironment) {}
+  fn set_environment(env: &mut impl env::SetEnvironment) {}
 
   /// Called during `retro_init`. This function is provided for the sake of completeness; it's generally redundant
   /// with [`Core::load_game`].
-  fn init(env: &mut impl InitEnvironment) {}
+  fn init(env: &mut impl env::Init) {}
 
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
   fn get_system_info() -> SystemInfo;
 
-  fn get_system_av_info(&self, env: &mut impl GetSystemAvInfoEnvironment) -> SystemAVInfo;
+  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo) -> SystemAVInfo;
 
-  fn get_region(&self, env: &mut impl GetRegionEnvironment) -> Region {
+  fn get_region(&self, env: &mut impl env::GetRegion) -> Region {
     Region::NTSC
   }
 
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
-  fn set_controller_port_device(&mut self, env: &mut impl SetPortDeviceEnvironment, port: DevicePort, device: Device) {}
+  fn set_controller_port_device(&mut self, env: &mut impl env::SetPortDevice, port: DevicePort, device: Device) {}
 
   /// Called when a player resets their game.
-  fn reset(&mut self, env: &mut impl ResetEnvironment);
+  fn reset(&mut self, env: &mut impl env::Reset);
 
   /// Called continuously once the core is initialized and a game is loaded. The core is expected to advance emulation
   /// by a single frame before returning.
-  fn run(&mut self, env: &mut impl RunEnvironment, runtime: &Runtime);
+  fn run(&mut self, env: &mut impl env::Run, runtime: &Runtime);
 
   /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
   /// not exceed the size returned here for subsequent saves.
-  fn serialize_size(&self, env: &mut impl SerializeSizeEnvironment) -> usize {
+  fn serialize_size(&self, env: &mut impl env::SerializeSize) -> usize {
     0
   }
 
   /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn serialize(&self, env: &mut impl SerializeEnvironment, data: &mut [u8]) -> Result<(), SerializeError> {
+  fn serialize(&self, env: &mut impl env::Serialize, data: &mut [u8]) -> Result<(), SerializeError> {
     Err(SerializeError::new())
   }
 
   /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn unserialize(&mut self, env: &mut impl UnserializeEnvironment, data: &[u8]) -> Result<(), UnserializeError> {
+  fn unserialize(&mut self, env: &mut impl env::Unserialize, data: &[u8]) -> Result<(), UnserializeError> {
     Err(UnserializeError::new())
   }
 
-  fn cheat_reset(&mut self, env: &mut impl CheatResetEnvironment) {}
+  fn cheat_reset(&mut self, env: &mut impl env::CheatReset) {}
 
-  fn cheat_set(&mut self, env: &mut impl CheatSetEnvironment, index: u32, enabled: bool, code: &str) {}
+  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: u32, enabled: bool, code: &str) {}
 
   /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
   /// required for the core to function properly.
-  fn load_game(env: &mut impl LoadGameEnvironment, game: Game) -> Result<Self, LoadGameError>;
+  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self, LoadGameError>;
 
-  fn load_game_special(
-    env: &mut impl LoadGameSpecialEnvironment,
-    game_type: GameType,
-    info: Game,
-  ) -> Result<Self, LoadGameError> {
+  fn load_game_special(env: &mut impl env::LoadGameSpecial, game_type: GameType, info: Game) -> Result<Self, LoadGameError> {
     Err(LoadGameError::new())
   }
 
-  fn unload_game(&mut self, env: &mut impl UnloadGameEnvironment) {}
+  fn unload_game(&mut self, env: &mut impl env::UnloadGame) {}
 
-  fn get_memory_data(&mut self, env: &mut impl GetMemoryDataEnvironment, id: MemoryType) -> Option<&mut [u8]> {
+  fn get_memory_data(&mut self, env: &mut impl env::GetMemoryData, id: MemoryType) -> Option<&mut [u8]> {
     None
   }
 }

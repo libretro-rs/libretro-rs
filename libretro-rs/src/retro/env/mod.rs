@@ -198,23 +198,23 @@ where
   }
 }
 
-pub trait SetEnvironmentEnvironment: Environment {
+pub trait SetEnvironment: Environment {
   fn set_support_no_game(&mut self, data: bool) -> Result<()> {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &data) }
   }
 }
-impl<T> SetEnvironmentEnvironment for T where T: Environment {}
+impl<T> SetEnvironment for T where T: Environment {}
 
-pub trait InitEnvironment: Environment {}
-impl<T> InitEnvironment for T where T: Environment {}
+pub trait Init: Environment {}
+impl<T> Init for T where T: Environment {}
 
-pub trait SetPortDeviceEnvironment: Environment {}
-impl<T> SetPortDeviceEnvironment for T where T: Environment {}
+pub trait SetPortDevice: Environment {}
+impl<T> SetPortDevice for T where T: Environment {}
 
-pub trait ResetEnvironment: Environment {}
-impl<T> ResetEnvironment for T where T: Environment {}
+pub trait Reset: Environment {}
+impl<T> Reset for T where T: Environment {}
 
-pub trait RunEnvironment: Environment {
+pub trait Run: Environment {
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   fn shutdown(&mut self) -> Result<()> {
     unsafe { self.cmd(RETRO_ENVIRONMENT_SHUTDOWN, ()) }
@@ -224,24 +224,24 @@ pub trait RunEnvironment: Environment {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_GEOMETRY, geometry) }
   }
 }
-impl<T> RunEnvironment for T where T: Environment {}
+impl<T> Run for T where T: Environment {}
 
-pub trait SerializeSizeEnvironment: Environment {}
-impl<T> SerializeSizeEnvironment for T where T: Environment {}
+pub trait SerializeSize: Environment {}
+impl<T> SerializeSize for T where T: Environment {}
 
-pub trait SerializeEnvironment: Environment {}
-impl<T> SerializeEnvironment for T where T: Environment {}
+pub trait Serialize: Environment {}
+impl<T> Serialize for T where T: Environment {}
 
-pub trait UnserializeEnvironment: Environment {}
-impl<T> UnserializeEnvironment for T where T: Environment {}
+pub trait Unserialize: Environment {}
+impl<T> Unserialize for T where T: Environment {}
 
-pub trait CheatResetEnvironment: Environment {}
-impl<T> CheatResetEnvironment for T where T: Environment {}
+pub trait CheatReset: Environment {}
+impl<T> CheatReset for T where T: Environment {}
 
-pub trait CheatSetEnvironment: Environment {}
-impl<T> CheatSetEnvironment for T where T: Environment {}
+pub trait CheatSet: Environment {}
+impl<T> CheatSet for T where T: Environment {}
 
-pub trait LoadGameEnvironment: Environment {
+pub trait LoadGame: Environment {
   /// Gives a hint to the frontend how demanding this implementation is on a system. E.g. Reporting
   /// a level of 2 means this implementation should run decently on all frontends of level 2 and up.
   ///
@@ -260,12 +260,12 @@ pub trait LoadGameEnvironment: Environment {
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
   /// If the call returns false, the frontend does not support this pixel format.
   fn set_pixel_format(&mut self, format: PixelFormat) -> Result<()> {
-    GetSystemAvInfoEnvironment::set_pixel_format(self, format)
+    GetAvInfo::set_pixel_format(self, format)
   }
 }
-impl<T> LoadGameEnvironment for T where T: Environment {}
+impl<T> LoadGame for T where T: Environment {}
 
-pub trait GetSystemAvInfoEnvironment: Environment {
+pub trait GetAvInfo: Environment {
   /// Sets the internal pixel format used by the implementation.
   /// The default pixel format is RETRO_PIXEL_FORMAT_0RGB1555.
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
@@ -274,19 +274,19 @@ pub trait GetSystemAvInfoEnvironment: Environment {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &(format as i32)) }
   }
 }
-impl<T> GetSystemAvInfoEnvironment for T where T: Environment {}
+impl<T> GetAvInfo for T where T: Environment {}
 
-pub trait GetRegionEnvironment: Environment {}
-impl<T> GetRegionEnvironment for T where T: Environment {}
+pub trait GetRegion: Environment {}
+impl<T> GetRegion for T where T: Environment {}
 
-pub trait LoadGameSpecialEnvironment: Environment {}
-impl<T> LoadGameSpecialEnvironment for T where T: Environment {}
+pub trait LoadGameSpecial: Environment {}
+impl<T> LoadGameSpecial for T where T: Environment {}
 
-pub trait UnloadGameEnvironment: Environment {}
-impl<T> UnloadGameEnvironment for T where T: Environment {}
+pub trait UnloadGame: Environment {}
+impl<T> UnloadGame for T where T: Environment {}
 
-pub trait GetMemoryDataEnvironment: Environment {}
-impl<T> GetMemoryDataEnvironment for T where T: Environment {}
+pub trait GetMemoryData: Environment {}
+impl<T> GetMemoryData for T where T: Environment {}
 
 pub trait GetMemorySizeEnvironment: Environment {}
 impl<T> GetMemorySizeEnvironment for T where T: Environment {}
