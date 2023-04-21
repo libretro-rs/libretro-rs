@@ -1,6 +1,6 @@
 mod callback_environment;
 mod convert;
-mod newtypes;
+pub mod newtypes;
 mod null_environment;
 
 use crate::prelude::*;

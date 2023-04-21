@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use crate::retro::environment::Result;
 use core::ffi::c_void;
 use env::{CommandData, EnvironmentCallback, Result};
 
