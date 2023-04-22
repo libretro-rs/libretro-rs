@@ -1,7 +1,47 @@
-use crate::retro::*;
-use std::convert::Infallible;
+use ::core::convert::Infallible;
+use ::core::fmt::{Debug, Display, Formatter};
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MemoryType(u32);
+
+impl MemoryType {
+  pub fn new(n: u32) -> Self {
+    Self(n)
+  }
+
+  pub fn into_inner(self) -> u32 {
+    self.0
+  }
+}
+
+impl From<u32> for MemoryType {
+  fn from(n: u32) -> Self {
+    Self(n)
+  }
+}
+
+impl From<MemoryType> for u32 {
+  fn from(memory_type: MemoryType) -> Self {
+    memory_type.into_inner()
+  }
+}
+
+trait TypeId: Sized {
+  fn into_discriminant(self) -> u8;
+  fn from_discriminant(id: u8) -> Option<Self>;
+}
+
+impl TypeId for () {
+  fn into_discriminant(self) -> u8 {
+    0
+  }
+
+  fn from_discriminant(_id: u8) -> Option<Self> {
+    None
+  }
+}
 
 /// Enum for the `RETRO_MEMORY_*` constants in `libretro.h`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -14,7 +54,7 @@ pub enum StandardMemoryType {
 }
 
 impl Display for StandardMemoryType {
-  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+  fn fmt(&self, f: &mut Formatter<'_>) -> ::core::fmt::Result {
     Display::fmt(&(*self as u8), f)
   }
 }

@@ -1,16 +1,15 @@
 mod callback_environment;
 mod convert;
-pub mod newtypes;
 mod null_environment;
 
-use crate::prelude::*;
+use crate::ffi::*;
 use crate::retro::*;
+use ::core::ffi::*;
 pub use callback_environment::*;
 pub use convert::*;
-pub use newtypes::*;
 pub use null_environment::*;
 
-pub type Result<T> = core::result::Result<T, CommandError>;
+pub type Result<T> = ::core::result::Result<T, CommandError>;
 
 pub trait EnvironmentCallback {
   unsafe fn get(&self, cmd: u32, data: &mut impl CommandData) -> Result<()>;

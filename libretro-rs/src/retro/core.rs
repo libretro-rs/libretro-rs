@@ -1,6 +1,217 @@
 use crate::ffi::*;
-use crate::prelude::*;
-use core::ffi::{c_char, c_uint, CStr};
+use crate::retro::*;
+use ::core::ffi::*;
+use ::core::ops::*;
+use c_utf8::CUtf8;
+
+#[allow(unused_variables)]
+pub trait Core: Sized {
+  /// Called during `retro_set_environment`.
+  fn set_environment(env: &mut impl env::SetEnvironment) {}
+
+  /// Called during `retro_init`. This function is provided for the sake of completeness; it's generally redundant
+  /// with [`Core::load_game`].
+  fn init(env: &mut impl env::Init) {}
+
+  /// Called to get information about the core. This information can then be displayed in a frontend, or used to
+  /// construct core-specific paths.
+  fn get_system_info() -> SystemInfo;
+
+  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo) -> SystemAVInfo;
+
+  fn get_region(&self, env: &mut impl env::GetRegion) -> Region {
+    Region::NTSC
+  }
+
+  /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
+  fn set_controller_port_device(&mut self, env: &mut impl env::SetPortDevice, port: DevicePort, device: Device) {}
+
+  /// Called when a player resets their game.
+  fn reset(&mut self, env: &mut impl env::Reset);
+
+  /// Called continuously once the core is initialized and a game is loaded. The core is expected to advance emulation
+  /// by a single frame before returning.
+  fn run(&mut self, env: &mut impl env::Run, runtime: &Runtime);
+
+  /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
+  /// not exceed the size returned here for subsequent saves.
+  fn serialize_size(&self, env: &mut impl env::SerializeSize) -> usize {
+    0
+  }
+
+  /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
+  /// bytes, where `size` is the value returned from `serialize_size`.
+  fn serialize(&self, env: &mut impl env::Serialize, data: &mut [u8]) -> Result<(), SerializeError> {
+    Err(SerializeError::new())
+  }
+
+  /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
+  /// bytes, where `size` is the value returned from `serialize_size`.
+  fn unserialize(&mut self, env: &mut impl env::Unserialize, data: &[u8]) -> Result<(), UnserializeError> {
+    Err(UnserializeError::new())
+  }
+
+  fn cheat_reset(&mut self, env: &mut impl env::CheatReset) {}
+
+  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: u32, enabled: bool, code: &str) {}
+
+  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
+  /// required for the core to function properly.
+  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self, LoadGameError>;
+
+  fn load_game_special(env: &mut impl env::LoadGameSpecial, game_type: GameType, info: Game) -> Result<Self, LoadGameError> {
+    Err(LoadGameError::new())
+  }
+
+  fn unload_game(&mut self, env: &mut impl env::UnloadGame) {}
+
+  fn get_memory_data(&mut self, env: &mut impl env::GetMemoryData, id: MemoryType) -> Option<&mut [u8]> {
+    None
+  }
+}
+
+/// Rust interface for [`retro_system_info`].
+#[repr(transparent)]
+#[derive(Clone, Debug)]
+pub struct SystemInfo(retro_system_info);
+
+impl SystemInfo {
+  /// Minimal constructor. Leaves [`SystemInfo::need_fullpath`] and
+  /// [`SystemInfo::block_extract`] set to [false].
+  pub fn new(library_name: &'static CUtf8, library_version: &'static CUtf8, valid_extensions: Extensions) -> Self {
+    Self(retro_system_info {
+      library_name: library_name.as_ptr(),
+      library_version: library_version.as_ptr(),
+      valid_extensions: valid_extensions.as_ptr(),
+      need_fullpath: false,
+      block_extract: false,
+    })
+  }
+
+  pub fn with_block_extract(mut self) -> Self {
+    self.0.block_extract = true;
+    self
+  }
+
+  pub fn with_need_full_path(mut self) -> Self {
+    self.0.need_fullpath = true;
+    self
+  }
+
+  pub fn library_name(&self) -> &'static CUtf8 {
+    unsafe { Self::ptr_to_str(self.0.library_name) }
+  }
+
+  pub fn library_version(&self) -> &'static CUtf8 {
+    unsafe { Self::ptr_to_str(self.0.library_version) }
+  }
+
+  pub fn valid_extensions(&self) -> Extensions {
+    if self.0.valid_extensions.is_null() {
+      Extensions(None)
+    } else {
+      Extensions(Some(unsafe { Self::ptr_to_str(self.0.valid_extensions) }))
+    }
+  }
+
+  pub fn need_fullpath(&self) -> bool {
+    self.0.need_fullpath
+  }
+
+  pub fn block_extract(&self) -> bool {
+    self.0.block_extract
+  }
+
+  pub fn into_inner(self) -> retro_system_info {
+    self.0
+  }
+
+  unsafe fn ptr_to_str(ptr: *const c_char) -> &'static CUtf8 {
+    // Safety: ptr must've come from a &'static CUtf8
+    unsafe { CUtf8::from_c_str_unchecked(CStr::from_ptr(ptr)) }
+  }
+}
+
+impl From<SystemInfo> for retro_system_info {
+  fn from(info: SystemInfo) -> Self {
+    info.into_inner()
+  }
+}
+
+pub struct Runtime {
+  audio_sample: retro_audio_sample_t,
+  audio_sample_batch: retro_audio_sample_batch_t,
+  input_state: retro_input_state_t,
+  video_refresh: retro_video_refresh_t,
+}
+
+impl Runtime {
+  pub fn new(
+    audio_sample: retro_audio_sample_t,
+    audio_sample_batch: retro_audio_sample_batch_t,
+    input_state: retro_input_state_t,
+    video_refresh: retro_video_refresh_t,
+  ) -> Runtime {
+    Runtime {
+      audio_sample,
+      audio_sample_batch,
+      input_state,
+      video_refresh,
+    }
+  }
+
+  /// Sends audio data to the `libretro` frontend.
+  pub fn upload_audio_frame(&self, frame: &[i16]) -> usize {
+    let cb = self
+      .audio_sample_batch
+      .expect("`upload_audio_frame` called without registering an `audio_sample_batch` callback");
+
+    unsafe { cb(frame.as_ptr(), frame.len() / 2) }
+  }
+
+  /// Sends audio data to the `libretro` frontend.
+  pub fn upload_audio_sample(&self, left: i16, right: i16) {
+    let cb = self
+      .audio_sample
+      .expect("`upload_audio_sample` called without registering an `audio_sample` callback");
+
+    unsafe { cb(left, right) }
+  }
+
+  /// Sends video data to the `libretro` frontend.
+  pub fn upload_video_frame(&self, frame: &[u8], width: u32, height: u32, pitch: usize) {
+    let cb = self
+      .video_refresh
+      .expect("`upload_video_frame` called without registering a `video_refresh` callback");
+
+    unsafe { cb(frame.as_ptr() as *const c_void, width, height, pitch) }
+  }
+
+  /// Returns true if the specified button is pressed, false otherwise.
+  pub fn is_joypad_button_pressed(&self, port: DevicePort, btn: JoypadButton) -> bool {
+    let cb = self
+      .input_state
+      .expect("`is_joypad_button_pressed` called without registering an `input_state` callback");
+
+    let port = c_uint::from(port.into_inner());
+    let device = RETRO_DEVICE_JOYPAD;
+    let index = 0;
+    let id = btn.into();
+    unsafe { cb(port, device, index, id) != 0 }
+  }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RetroVariable<'a>(pub Option<&'a CStr>);
+
+impl<'a> Deref for RetroVariable<'a> {
+  type Target = Option<&'a CStr>;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
 
 /// This is the glue layer between a [Core] and the `libretro` API.
 #[doc(hidden)]
@@ -128,7 +339,7 @@ impl<T: Core> Instance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_serialize` API call.
   pub fn on_serialize(&self, data: *mut (), size: usize) -> bool {
     unsafe {
-      let data = core::slice::from_raw_parts_mut(data as *mut u8, size);
+      let data = ::core::slice::from_raw_parts_mut(data as *mut u8, size);
       let mut env = self.environment();
       self.core_ref(|core| core.serialize(&mut env, data).is_ok())
     }
@@ -137,7 +348,7 @@ impl<T: Core> Instance<T> {
   /// Invoked by a `libretro` frontend, with the `retro_unserialize` API call.
   pub fn on_unserialize(&mut self, data: *const (), size: usize) -> bool {
     unsafe {
-      let data = core::slice::from_raw_parts(data as *const u8, size);
+      let data = ::core::slice::from_raw_parts(data as *const u8, size);
       let mut env = self.environment();
       self.core_mut(|core| core.unserialize(&mut env, data).is_ok())
     }
@@ -247,11 +458,10 @@ macro_rules! libretro_core {
   ($core:ty) => {
     #[doc(hidden)]
     mod __libretro_rs_gen {
-      use super::*;
-      use core::ffi::c_char;
-      use core::ffi::*;
-      use libretro_rs::ffi::*;
-      use libretro_rs::prelude::*;
+      use ::core::ffi::c_char;
+      use ::core::ffi::*;
+      use ::libretro_rs::ffi::*;
+      use ::libretro_rs::retro::*;
 
       static mut RETRO_INSTANCE: Instance<$core> = Instance {
         environment: None,

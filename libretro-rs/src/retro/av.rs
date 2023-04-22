@@ -1,6 +1,27 @@
 use crate::ffi::*;
+use c_utf8::CUtf8;
 use core::ffi::*;
 use core::ops::*;
+
+/// Represents the set of regions supported by `libretro`.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Region {
+  /// A 30 frames/second (60 fields/second) video system.
+  #[default]
+  NTSC = 0,
+  /// A 25 frames/second (50 fields/second) video system.
+  PAL = 1,
+}
+
+impl From<Region> for c_uint {
+  fn from(region: Region) -> Self {
+    match region {
+      Region::NTSC => 0,
+      Region::PAL => 1,
+    }
+  }
+}
 
 /// Rust interface for [`retro_system_av_info`].
 #[repr(transparent)]
@@ -173,5 +194,62 @@ impl AsMut<retro_system_timing> for SystemTiming {
 impl From<SystemTiming> for retro_system_timing {
   fn from(timing: SystemTiming) -> Self {
     timing.into_inner()
+  }
+}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum PixelFormat {
+  #[default]
+  RGB1555 = 0,
+  XRGB8888 = 1,
+  RGB565 = 2,
+}
+
+impl From<PixelFormat> for c_int {
+  fn from(value: PixelFormat) -> Self {
+    value as c_int
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ScreenRotation {
+  #[default]
+  ZeroDegrees = 0,
+  NinetyDegrees = 1,
+  OneEightyDegrees = 2,
+  TwoSeventyDegrees = 3,
+}
+
+impl From<ScreenRotation> for c_uint {
+  fn from(value: ScreenRotation) -> Self {
+    value as c_uint
+  }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Message(retro_message);
+
+impl Message {
+  pub fn new<'a>(msg: impl Into<&'a CUtf8>, frames: u32) -> Self {
+    Self(retro_message {
+      msg: msg.into().as_ptr(),
+      frames,
+    })
+  }
+
+  pub fn msg(&self) -> &CUtf8 {
+    unsafe { CUtf8::from_c_str_unchecked(CStr::from_ptr(self.0.msg)) }
+  }
+
+  pub fn frames(&self) -> u32 {
+    self.0.frames
+  }
+}
+
+impl From<Message> for retro_message {
+  fn from(value: Message) -> Self {
+    value.0
   }
 }

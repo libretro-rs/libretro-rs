@@ -1,6 +1,6 @@
-use crate::prelude::*;
-use core::ffi::c_void;
-use env::{CommandData, EnvironmentCallback, Result};
+use super::*;
+use crate::retro::*;
+use ::core::ffi::*;
 
 pub type EnvironmentPtr = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
 

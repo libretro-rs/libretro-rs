@@ -1,7 +1,7 @@
 use crate::*;
 
 use libretro_rs::c_utf8::c_utf8;
-use libretro_rs::prelude::*;
+use libretro_rs::retro::*;
 use libretro_rs::{extensions, libretro_core};
 
 pub struct LibretroCore {
@@ -107,7 +107,7 @@ impl Core for LibretroCore {
   }
 }
 
-libretro_core!(LibretroCore);
+libretro_core!(crate::libretro::LibretroCore);
 
 #[derive(Clone, Copy)]
 pub struct Color {

@@ -1,6 +1,6 @@
+use ::core::ffi::*;
+use ::core::ptr;
 use c_utf8::CUtf8;
-use core::ffi::*;
-use core::ptr;
 
 /// A list of file extensions encoded in a pipe-delimited static C string,
 /// as specified by the libretro API. Use the [extensions!] macro to create
@@ -25,7 +25,8 @@ impl From<Extensions> for *const c_char {
 ///
 /// # Examples
 /// ```
-/// use libretro_rs::*;
+/// use libretro_rs::extensions;
+/// use libretro_rs::retro::*;
 /// use libretro_rs::c_utf8::c_utf8;
 /// assert_eq!(extensions![], Extensions(None));
 /// assert_eq!(extensions!["rom"], Extensions(Some(c_utf8!("rom"))));
