@@ -102,11 +102,11 @@ impl SystemInfo {
   }
 
   pub fn library_name(&self) -> &'static CStr {
-    unsafe { CStr::from_ptr::<'static>(self.0.library_name) }
+    unsafe { CStr::from_ptr(self.0.library_name) }
   }
 
   pub fn library_version(&self) -> &'static CStr {
-    unsafe { CStr::from_ptr::<'static>(self.0.library_version) }
+    unsafe { CStr::from_ptr(self.0.library_version) }
   }
 
   pub fn valid_extensions(&self) -> Extensions<'static> {

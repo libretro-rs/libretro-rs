@@ -126,8 +126,16 @@ pub trait Environment: Sized {
     unsafe { self.get(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY).unsafe_into() }
   }
 
-  fn get_variable(&self, key: &impl AsRef<CStr>) -> Result<RetroVariable> {
-    unsafe { self.get_with(RETRO_ENVIRONMENT_GET_VARIABLE, key.as_ref()).unsafe_into() }
+  fn get_variable(&self, key: &impl AsRef<CStr>) -> Result<Option<&CStr>> {
+    let variable = retro_variable {
+      key: key.as_ref().as_ptr(),
+      value: ::core::ptr::null(),
+    };
+    unsafe {
+      self
+        .get_with(RETRO_ENVIRONMENT_GET_VARIABLE, variable)
+        .map(|var: retro_variable| var.value.as_ref().map(|ptr| CStr::from_ptr(ptr)))
+    }
   }
 
   /// Queries the username associated with the frontend.

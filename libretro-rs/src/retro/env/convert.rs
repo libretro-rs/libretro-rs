@@ -73,9 +73,3 @@ impl UnsafeFrom<retro_log_callback> for PlatformLogger {
     PlatformLogger::new(cb.log.unwrap())
   }
 }
-
-impl<'a> UnsafeFrom<retro_variable> for RetroVariable<'a> {
-  unsafe fn unsafe_from(var: retro_variable) -> Self {
-    Self::new(var.value.as_ref().map(|ptr| CStr::from_ptr(ptr)))
-  }
-}
