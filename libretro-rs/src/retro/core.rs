@@ -2,7 +2,6 @@ use crate::ffi::*;
 use crate::retro::*;
 use ::core::ffi::*;
 use ::core::ops::*;
-use c_utf8::CUtf8;
 
 #[allow(unused_variables)]
 pub trait Core: Sized {
@@ -53,7 +52,7 @@ pub trait Core: Sized {
 
   fn cheat_reset(&mut self, env: &mut impl env::CheatReset) {}
 
-  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: u32, enabled: bool, code: &str) {}
+  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: c_uint, enabled: bool, code: &str) {}
 
   /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
   /// required for the core to function properly.
@@ -78,10 +77,14 @@ pub struct SystemInfo(retro_system_info);
 impl SystemInfo {
   /// Minimal constructor. Leaves [`SystemInfo::need_fullpath`] and
   /// [`SystemInfo::block_extract`] set to [false].
-  pub fn new(library_name: &'static CUtf8, library_version: &'static CUtf8, valid_extensions: Extensions) -> Self {
+  pub fn new<T, U>(library_name: &'static T, library_version: &'static U, valid_extensions: Extensions<'static>) -> Self
+  where
+    T: AsRef<CStr> + ?Sized,
+    U: AsRef<CStr> + ?Sized,
+  {
     Self(retro_system_info {
-      library_name: library_name.as_ptr(),
-      library_version: library_version.as_ptr(),
+      library_name: library_name.as_ref().as_ptr(),
+      library_version: library_version.as_ref().as_ptr(),
       valid_extensions: valid_extensions.as_ptr(),
       need_fullpath: false,
       block_extract: false,
@@ -98,20 +101,16 @@ impl SystemInfo {
     self
   }
 
-  pub fn library_name(&self) -> &'static CUtf8 {
-    unsafe { Self::ptr_to_str(self.0.library_name) }
+  pub fn library_name(&self) -> &'static CStr {
+    unsafe { CStr::from_ptr::<'static>(self.0.library_name) }
   }
 
-  pub fn library_version(&self) -> &'static CUtf8 {
-    unsafe { Self::ptr_to_str(self.0.library_version) }
+  pub fn library_version(&self) -> &'static CStr {
+    unsafe { CStr::from_ptr::<'static>(self.0.library_version) }
   }
 
-  pub fn valid_extensions(&self) -> Extensions {
-    if self.0.valid_extensions.is_null() {
-      Extensions(None)
-    } else {
-      Extensions(Some(unsafe { Self::ptr_to_str(self.0.valid_extensions) }))
-    }
+  pub fn valid_extensions(&self) -> Extensions<'static> {
+    Extensions::new(unsafe { CStr::from_ptr(self.0.valid_extensions) })
   }
 
   pub fn need_fullpath(&self) -> bool {
@@ -125,11 +124,6 @@ impl SystemInfo {
   pub fn into_inner(self) -> retro_system_info {
     self.0
   }
-
-  unsafe fn ptr_to_str(ptr: *const c_char) -> &'static CUtf8 {
-    // Safety: ptr must've come from a &'static CUtf8
-    unsafe { CUtf8::from_c_str_unchecked(CStr::from_ptr(ptr)) }
-  }
 }
 
 impl From<SystemInfo> for retro_system_info {
@@ -138,6 +132,7 @@ impl From<SystemInfo> for retro_system_info {
   }
 }
 
+#[derive(Clone, Debug)]
 pub struct Runtime {
   audio_sample: retro_audio_sample_t,
   audio_sample_batch: retro_audio_sample_batch_t,
@@ -179,7 +174,7 @@ impl Runtime {
   }
 
   /// Sends video data to the `libretro` frontend.
-  pub fn upload_video_frame(&self, frame: &[u8], width: u32, height: u32, pitch: usize) {
+  pub fn upload_video_frame(&self, frame: &[u8], width: c_uint, height: c_uint, pitch: usize) {
     let cb = self
       .video_refresh
       .expect("`upload_video_frame` called without registering a `video_refresh` callback");
@@ -203,7 +198,13 @@ impl Runtime {
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
-pub struct RetroVariable<'a>(pub Option<&'a CStr>);
+pub struct RetroVariable<'a>(Option<&'a CStr>);
+
+impl<'a> RetroVariable<'a> {
+  pub fn new(str: Option<&'a CStr>) -> Self {
+    Self(str)
+  }
+}
 
 impl<'a> Deref for RetroVariable<'a> {
   type Target = Option<&'a CStr>;
@@ -219,7 +220,7 @@ pub struct Instance<T> {
   pub system: Option<T>,
   pub audio_sample: retro_audio_sample_t,
   pub audio_sample_batch: retro_audio_sample_batch_t,
-  pub environment: retro_environment_t,
+  pub environment: Option<env::EnvironmentPtr>,
   pub input_poll: retro_input_poll_t,
   pub input_state: retro_input_state_t,
   pub video_refresh: retro_video_refresh_t,

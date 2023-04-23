@@ -1,28 +1,29 @@
 use ::core::convert::Infallible;
 use ::core::fmt::{Debug, Display, Formatter};
 use std::error::Error;
+use std::ffi::c_uint;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct MemoryType(u32);
+pub struct MemoryType(c_uint);
 
 impl MemoryType {
-  pub fn new(n: u32) -> Self {
+  pub fn new(n: c_uint) -> Self {
     Self(n)
   }
 
-  pub fn into_inner(self) -> u32 {
+  pub fn into_inner(self) -> c_uint {
     self.0
   }
 }
 
-impl From<u32> for MemoryType {
-  fn from(n: u32) -> Self {
+impl From<c_uint> for MemoryType {
+  fn from(n: c_uint) -> Self {
     Self(n)
   }
 }
 
-impl From<MemoryType> for u32 {
+impl From<MemoryType> for c_uint {
   fn from(memory_type: MemoryType) -> Self {
     memory_type.into_inner()
   }
@@ -64,7 +65,7 @@ impl From<StandardMemoryType> for MemoryType {
   /// left-shifts subsystem memory types to the upper 8 bits as recommended
   /// by the libretro API to avoid conflicts with future memory types.
   fn from(mem_type: StandardMemoryType) -> Self {
-    MemoryType::new(mem_type as u32)
+    MemoryType::new(mem_type as c_uint)
   }
 }
 

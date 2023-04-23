@@ -2,42 +2,42 @@ use super::*;
 use crate::retro::*;
 use ::core::ffi::*;
 
-pub type EnvironmentPtr = unsafe extern "C" fn(cmd: u32, data: *mut c_void) -> bool;
+#[repr(transparent)]
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+pub struct EnvironmentPtr(not_null_retro_environment_t);
+
+impl EnvironmentPtr {
+  pub fn new(ptr: not_null_retro_environment_t) -> Self {
+    Self(ptr)
+  }
+
+  unsafe fn with_ref(&self, cmd: c_uint, data: &impl CommandData) -> Result<()> {
+    if self.0(cmd, data as *const _ as *mut c_void) {
+      Ok(())
+    } else {
+      Err(CommandError::new())
+    }
+  }
+
+  unsafe fn with_mut(&self, cmd: c_uint, data: &mut impl CommandData) -> Result<()> {
+    if self.0(cmd, data as *mut _ as *mut c_void) {
+      Ok(())
+    } else {
+      Err(CommandError::new())
+    }
+  }
+}
 
 impl EnvironmentCallback for EnvironmentPtr {
-  unsafe fn get(&self, cmd: u32, data: &mut impl CommandData) -> Result<()> {
-    callback_mut(*self, cmd, data)
+  unsafe fn get(&self, cmd: c_uint, data: &mut impl CommandData) -> Result<()> {
+    self.with_mut(cmd, data)
   }
 
-  unsafe fn set(&mut self, cmd: u32, data: &impl CommandData) -> Result<()> {
-    callback_ref(self, cmd, data)
+  unsafe fn set(&mut self, cmd: c_uint, data: &impl CommandData) -> Result<()> {
+    self.with_ref(cmd, data)
   }
 
-  unsafe fn cmd(&mut self, cmd: u32, data: &mut impl CommandData) -> Result<()> {
-    callback_mut(*self, cmd, data)
-  }
-}
-
-unsafe fn callback_ref<C, D>(cb: &EnvironmentPtr, cmd: C, data: &D) -> Result<()>
-where
-  C: Into<u32>,
-  D: CommandData,
-{
-  if cb(cmd.into(), data as *const _ as *mut c_void) {
-    Ok(())
-  } else {
-    Err(CommandError::new())
-  }
-}
-
-unsafe fn callback_mut<C, D>(cb: EnvironmentPtr, cmd: C, data: &mut D) -> Result<()>
-where
-  C: Into<u32>,
-  D: CommandData,
-{
-  if cb(cmd.into(), data as *mut _ as *mut c_void) {
-    Ok(())
-  } else {
-    Err(CommandError::new())
+  unsafe fn cmd(&mut self, cmd: c_uint, data: &mut impl CommandData) -> Result<()> {
+    self.with_mut(cmd, data)
   }
 }

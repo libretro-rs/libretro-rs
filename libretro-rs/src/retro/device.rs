@@ -1,7 +1,7 @@
 use ::core::ffi::*;
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Device {
   #[default]
   None = 0,
@@ -32,7 +32,7 @@ impl TryFrom<c_uint> for Device {
 
 /// A libretro device port.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DevicePort(u8);
 
 impl DevicePort {
@@ -83,27 +83,8 @@ pub enum JoypadButton {
   Mask = 256,
 }
 
-impl From<JoypadButton> for u32 {
-  fn from(button: JoypadButton) -> u32 {
-    match button {
-      JoypadButton::B => 0,
-      JoypadButton::Y => 1,
-      JoypadButton::Select => 2,
-      JoypadButton::Start => 3,
-      JoypadButton::Up => 4,
-      JoypadButton::Down => 5,
-      JoypadButton::Left => 6,
-      JoypadButton::Right => 7,
-      JoypadButton::A => 8,
-      JoypadButton::X => 9,
-      JoypadButton::L1 => 10,
-      JoypadButton::R1 => 11,
-      JoypadButton::L2 => 12,
-      JoypadButton::R2 => 13,
-      JoypadButton::L3 => 14,
-      JoypadButton::R3 => 15,
-      #[cfg(experimental)]
-      JoypadButton::Mask => 256,
-    }
+impl From<JoypadButton> for c_uint {
+  fn from(button: JoypadButton) -> c_uint {
+    button as c_uint
   }
 }

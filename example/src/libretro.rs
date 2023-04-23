@@ -2,7 +2,7 @@ use crate::*;
 
 use libretro_rs::c_utf8::c_utf8;
 use libretro_rs::retro::*;
-use libretro_rs::{extensions, libretro_core};
+use libretro_rs::{ext, libretro_core};
 
 pub struct LibretroCore {
   cpu: cpu::Cpu,
@@ -68,7 +68,7 @@ fn key_to_retro_button(key: keyboard::Key) -> JoypadButton {
 
 impl Core for LibretroCore {
   fn get_system_info() -> SystemInfo {
-    SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), extensions!["png"])
+    SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), ext!["png"])
   }
 
   fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self, LoadGameError> {

@@ -58,25 +58,25 @@ impl<'a> From<&retro_game_info> for Game<'a> {
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct GameType(u32);
+pub struct GameType(c_uint);
 
 impl GameType {
-  pub fn new(n: u32) -> Self {
+  pub fn new(n: c_uint) -> Self {
     Self(n)
   }
 
-  pub fn into_inner(self) -> u32 {
+  pub fn into_inner(self) -> c_uint {
     self.0
   }
 }
 
-impl From<u32> for GameType {
-  fn from(n: u32) -> Self {
+impl From<c_uint> for GameType {
+  fn from(n: c_uint) -> Self {
     Self(n)
   }
 }
 
-impl From<GameType> for u32 {
+impl From<GameType> for c_uint {
   fn from(game_type: GameType) -> Self {
     game_type.into_inner()
   }

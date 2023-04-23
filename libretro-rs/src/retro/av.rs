@@ -1,11 +1,10 @@
 use crate::ffi::*;
-use c_utf8::CUtf8;
 use core::ffi::*;
 use core::ops::*;
 
 /// Represents the set of regions supported by `libretro`.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Region {
   /// A 30 frames/second (60 fields/second) video system.
   #[default]
@@ -16,16 +15,13 @@ pub enum Region {
 
 impl From<Region> for c_uint {
   fn from(region: Region) -> Self {
-    match region {
-      Region::NTSC => 0,
-      Region::PAL => 1,
-    }
+    region as c_uint
   }
 }
 
 /// Rust interface for [`retro_system_av_info`].
 #[repr(transparent)]
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct SystemAVInfo(retro_system_av_info);
 
 impl SystemAVInfo {
@@ -198,7 +194,7 @@ impl From<SystemTiming> for retro_system_timing {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PixelFormat {
   #[default]
   RGB1555 = 0,
@@ -228,22 +224,22 @@ impl From<ScreenRotation> for c_uint {
 }
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Message(retro_message);
 
 impl Message {
-  pub fn new<'a>(msg: impl Into<&'a CUtf8>, frames: u32) -> Self {
+  pub fn new<'a>(msg: impl Into<&'a CStr>, frames: c_uint) -> Self {
     Self(retro_message {
       msg: msg.into().as_ptr(),
       frames,
     })
   }
 
-  pub fn msg(&self) -> &CUtf8 {
-    unsafe { CUtf8::from_c_str_unchecked(CStr::from_ptr(self.0.msg)) }
+  pub fn msg(&self) -> &CStr {
+    unsafe { CStr::from_ptr(self.0.msg) }
   }
 
-  pub fn frames(&self) -> u32 {
+  pub fn frames(&self) -> c_uint {
     self.0.frames
   }
 }

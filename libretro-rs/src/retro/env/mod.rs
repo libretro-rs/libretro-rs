@@ -12,7 +12,7 @@ pub use null_environment::*;
 pub type Result<T> = ::core::result::Result<T, CommandError>;
 
 pub trait EnvironmentCallback {
-  unsafe fn get(&self, cmd: u32, data: &mut impl CommandData) -> Result<()>;
+  unsafe fn get(&self, cmd: c_uint, data: &mut impl CommandData) -> Result<()>;
 
   /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
   ///
@@ -21,7 +21,7 @@ pub trait EnvironmentCallback {
   ///
   /// See `libretro.h` for the requirements of environment commands.
   /// See [CommandData] for more information about type requirements.
-  unsafe fn set(&mut self, cmd: u32, data: &impl CommandData) -> Result<()>;
+  unsafe fn set(&mut self, cmd: c_uint, data: &impl CommandData) -> Result<()>;
 
   /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
   /// Returns `Some(T)` iff the command succeeds.
@@ -31,7 +31,7 @@ pub trait EnvironmentCallback {
   /// # Safety
   /// See `libretro.h` for the requirements of environment commands.
   /// See [CommandData] for more information about type requirements.
-  unsafe fn cmd(&mut self, cmd: u32, data: &mut impl CommandData) -> Result<()>;
+  unsafe fn cmd(&mut self, cmd: c_uint, data: &mut impl CommandData) -> Result<()>;
 }
 
 /// Exposes the [`retro_environment_t`] callback in an idiomatic fashion.
@@ -47,7 +47,7 @@ pub trait Environment: Sized {
   /// See [CommandData] for more information about type requirements.
   unsafe fn get<C, R>(&self, cmd: C) -> Result<R>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     R: Default + CommandData;
 
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
@@ -59,18 +59,18 @@ pub trait Environment: Sized {
   /// See [CommandData] for more information about type requirements.
   unsafe fn get_with<C, D, R>(&self, cmd: C, data: D) -> Result<R>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     D: Into<R>,
     R: CommandData;
 
   unsafe fn set<C, D>(&mut self, cmd: C, data: &D) -> Result<()>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     D: CommandData;
 
   unsafe fn cmd<C, D, R>(&mut self, cmd: C, data: D) -> Result<R>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     D: Into<R>,
     R: CommandData;
 
@@ -155,7 +155,7 @@ where
   /// See [CommandData] for more information about type requirements.
   unsafe fn get<C, R>(&self, cmd: C) -> Result<R>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     R: Default + CommandData,
   {
     self.get_with(cmd, R::default())
@@ -170,7 +170,7 @@ where
   /// See [CommandData] for more information about type requirements.
   unsafe fn get_with<C, D, R>(&self, cmd: C, data: D) -> Result<R>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     D: Into<R>,
     R: CommandData,
   {
@@ -180,7 +180,7 @@ where
 
   unsafe fn set<C, D>(&mut self, cmd: C, data: &D) -> Result<()>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     D: CommandData,
   {
     EnvironmentCallback::set(self, cmd.into(), data)
@@ -188,7 +188,7 @@ where
 
   unsafe fn cmd<C, D, R>(&mut self, cmd: C, data: D) -> Result<R>
   where
-    C: Into<u32>,
+    C: Into<c_uint>,
     D: Into<R>,
     R: CommandData,
   {
@@ -250,7 +250,7 @@ pub trait LoadGame: Environment {
   ///
   /// This function can be called on a per-game basis, as certain games an implementation can play
   /// might be particularly demanding.
-  fn set_performance_level(&mut self, performance_level: impl Into<u32>) -> Result<()> {
+  fn set_performance_level(&mut self, performance_level: impl Into<c_uint>) -> Result<()> {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &performance_level.into()) }
   }
 
@@ -270,7 +270,7 @@ pub trait GetAvInfo: Environment {
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
   /// If the call returns false, the frontend does not support this pixel format.
   fn set_pixel_format(&mut self, format: PixelFormat) -> Result<()> {
-    unsafe { self.set(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &(format as i32)) }
+    unsafe { self.set(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &(format as c_int)) }
   }
 }
 impl<T> GetAvInfo for T where T: Environment {}
