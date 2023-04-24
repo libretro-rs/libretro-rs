@@ -1,6 +1,7 @@
 use crate::ffi::*;
 use crate::retro::*;
 use ::core::ffi::*;
+use ::core::result::Result;
 use c_utf8::CUtf8;
 
 /// Marker trait for types that are valid arguments to the environment callback.

@@ -16,7 +16,14 @@ impl From<&CStr> for retro_variable {
   }
 }
 
-pub type not_null_retro_environment_t = unsafe extern "C" fn(cmd: c_uint, data: *mut c_void) -> bool;
+pub type non_null_retro_audio_sample_t = unsafe extern "C" fn(left: i16, right: i16);
+pub type non_null_retro_audio_sample_batch_t = unsafe extern "C" fn(data: *const i16, frames: usize) -> usize;
+pub type non_null_retro_environment_t = unsafe extern "C" fn(cmd: c_uint, data: *mut c_void) -> bool;
+pub type non_null_retro_input_poll_t = unsafe extern "C" fn();
+pub type non_null_retro_input_state_t = unsafe extern "C" fn(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16;
+pub type non_null_retro_video_refresh_t = unsafe extern "C" fn(data: *const c_void, width: c_uint, height: c_uint, pitch: usize);
+
+pub const RETRO_HW_FRAME_BUFFER_VALID: *const c_void = sptr::invalid(usize::MAX);
 
 #[cfg(test)]
 mod tests {

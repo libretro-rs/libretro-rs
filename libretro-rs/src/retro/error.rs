@@ -19,16 +19,22 @@ macro_rules! retro_error {
     }
 
     impl Error for $name {}
+
+    impl<T> From<::core::result::Result<T, Box<dyn Error>>> for $name {
+      fn from(_value: ::core::result::Result<T, Box<dyn Error>>) -> Self {
+        Self::new()
+      }
+    }
   };
 }
 
-retro_error!(LoadGameError, "failed to load game");
-retro_error!(SerializeError, "failed to serialize state");
-retro_error!(UnserializeError, "failed to unserialize state");
-retro_error!(CommandError, "failed to execute environment command");
+retro_error!(CoreError, "a libretro API function call did not succeed");
+retro_error!(CommandError, "a libretro environment command did not succeed");
 
-impl From<CommandError> for LoadGameError {
+impl From<CommandError> for CoreError {
   fn from(_value: CommandError) -> Self {
-    Self::default()
+    Self::new()
   }
 }
+
+pub type Result<T> = ::core::result::Result<T, CoreError>;

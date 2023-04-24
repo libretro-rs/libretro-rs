@@ -11,7 +11,7 @@ pub struct LibretroCore {
 }
 
 impl LibretroCore {
-  pub fn render_audio(&mut self, runtime: &Runtime) {
+  pub fn render_audio(&mut self, runtime: &mut impl Runtime) {
     self.cpu.timer.wave(|n, val| {
       self.audio_buffer[(n * 2) + 0] = (val * 32767.0).clamp(-32768.0, 32767.0) as i16;
       self.audio_buffer[(n * 2) + 1] = (val * 32767.0).clamp(-32768.0, 32767.0) as i16;
@@ -20,7 +20,7 @@ impl LibretroCore {
     runtime.upload_audio_frame(&self.audio_buffer);
   }
 
-  pub fn render_video(&mut self, runtime: &Runtime) {
+  pub fn render_video(&mut self, runtime: &mut impl Runtime) {
     const PIXEL_SIZE: usize = 4;
     const PITCH: usize = PIXEL_SIZE * display::WIDTH;
 
@@ -45,7 +45,7 @@ impl LibretroCore {
     self.frame_buffer[index + 3] = 0xff;
   }
 
-  pub fn update_input(&mut self, runtime: &Runtime) {
+  pub fn update_input(&mut self, runtime: &mut impl Runtime) {
     for key in keyboard::Keyboard::keys() {
       // todo: chip-8 has a very clunky mapping to a controller.
 
@@ -71,7 +71,7 @@ impl Core for LibretroCore {
     SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), ext!["png"])
   }
 
-  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self, LoadGameError> {
+  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self> {
     env.set_pixel_format(PixelFormat::XRGB8888)?;
     match game {
       Game::Data { data, .. } => {
@@ -82,7 +82,7 @@ impl Core for LibretroCore {
         };
         Ok(core)
       }
-      _ => Err(LoadGameError::new()),
+      _ => Err(CoreError::new()),
     }
   }
 
@@ -97,7 +97,7 @@ impl Core for LibretroCore {
     todo!()
   }
 
-  fn run(&mut self, _env: &mut impl env::Run, runtime: &Runtime) {
+  fn run(&mut self, _env: &mut impl env::Run, runtime: &mut impl Runtime) {
     self.update_input(runtime);
 
     self.cpu.step_for(25);

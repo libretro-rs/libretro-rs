@@ -1,5 +1,31 @@
 use ::core::ffi::*;
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct DeviceType(c_uint);
+
+impl DeviceType {
+  pub fn new(id: c_uint) -> Self {
+    Self(id)
+  }
+
+  pub fn into_inner(self) -> c_uint {
+    self.0
+  }
+}
+
+impl From<c_uint> for DeviceType {
+  fn from(port_number: c_uint) -> Self {
+    Self::new(port_number)
+  }
+}
+
+impl From<DeviceType> for c_uint {
+  fn from(id: DeviceType) -> Self {
+    id.into_inner()
+  }
+}
+
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Device {
@@ -33,27 +59,27 @@ impl TryFrom<c_uint> for Device {
 /// A libretro device port.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct DevicePort(u8);
+pub struct DevicePort(c_uint);
 
 impl DevicePort {
   /// Creates a [`DevicePort`].
-  pub fn new(port_number: u8) -> Self {
+  pub fn new(port_number: c_uint) -> Self {
     DevicePort(port_number)
   }
 
   // Converts this port back into a u8.
-  pub fn into_inner(self) -> u8 {
+  pub fn into_inner(self) -> c_uint {
     self.0
   }
 }
 
-impl From<u8> for DevicePort {
-  fn from(port_number: u8) -> Self {
+impl From<c_uint> for DevicePort {
+  fn from(port_number: c_uint) -> Self {
     Self::new(port_number)
   }
 }
 
-impl From<DevicePort> for u8 {
+impl From<DevicePort> for c_uint {
   fn from(port: DevicePort) -> Self {
     port.into_inner()
   }

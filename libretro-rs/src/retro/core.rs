@@ -23,14 +23,21 @@ pub trait Core: Sized {
   }
 
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
-  fn set_controller_port_device(&mut self, env: &mut impl env::SetPortDevice, port: DevicePort, device: Device) {}
+  fn set_controller_port_device(
+    &mut self,
+    env: &mut impl env::SetPortDevice,
+    port: DevicePort,
+    device: DeviceType,
+  ) -> Result<()> {
+    Err(CoreError::new())
+  }
 
   /// Called when a player resets their game.
   fn reset(&mut self, env: &mut impl env::Reset);
 
   /// Called continuously once the core is initialized and a game is loaded. The core is expected to advance emulation
   /// by a single frame before returning.
-  fn run(&mut self, env: &mut impl env::Run, runtime: &Runtime);
+  fn run(&mut self, env: &mut impl env::Run, runtime: &mut impl Runtime);
 
   /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
   /// not exceed the size returned here for subsequent saves.
@@ -40,32 +47,38 @@ pub trait Core: Sized {
 
   /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn serialize(&self, env: &mut impl env::Serialize, data: &mut [u8]) -> Result<(), SerializeError> {
-    Err(SerializeError::new())
+  fn serialize(&self, env: &mut impl env::Serialize, data: &mut [u8]) -> Result<()> {
+    Err(CoreError::new())
   }
 
   /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn unserialize(&mut self, env: &mut impl env::Unserialize, data: &[u8]) -> Result<(), UnserializeError> {
-    Err(UnserializeError::new())
+  fn unserialize(&mut self, env: &mut impl env::Unserialize, data: &[u8]) -> Result<()> {
+    Err(CoreError::new())
   }
 
   fn cheat_reset(&mut self, env: &mut impl env::CheatReset) {}
 
-  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: c_uint, enabled: bool, code: &str) {}
+  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: c_uint, enabled: bool, code: &CStr) -> Result<()> {
+    Err(CoreError::new())
+  }
 
   /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
   /// required for the core to function properly.
-  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self, LoadGameError>;
+  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self>;
 
-  fn load_game_special(env: &mut impl env::LoadGameSpecial, game_type: GameType, info: Game) -> Result<Self, LoadGameError> {
-    Err(LoadGameError::new())
+  fn load_game_special(env: &mut impl env::LoadGameSpecial, game_type: GameType, info: Game) -> Result<Self> {
+    Err(CoreError::new())
   }
 
   fn unload_game(&mut self, env: &mut impl env::UnloadGame) {}
 
-  fn get_memory_data(&mut self, env: &mut impl env::GetMemoryData, id: MemoryType) -> Option<&mut [u8]> {
-    None
+  fn get_memory_size(&self, env: &mut impl env::GetMemorySize, id: MemoryType) -> Result<usize> {
+    Err(CoreError::new())
+  }
+
+  fn get_memory_data(&self, env: &mut impl env::GetMemoryData, id: MemoryType) -> Result<&mut [u8]> {
+    Err(CoreError::new())
   }
 }
 
@@ -132,67 +145,93 @@ impl From<SystemInfo> for retro_system_info {
   }
 }
 
-#[derive(Clone, Debug)]
-pub struct Runtime {
-  audio_sample: retro_audio_sample_t,
-  audio_sample_batch: retro_audio_sample_batch_t,
-  input_state: retro_input_state_t,
-  video_refresh: retro_video_refresh_t,
+pub trait Runtime {
+  /// Sends audio data to the `libretro` frontend.
+  fn upload_audio_frame(&mut self, frame: &[i16]) -> usize;
+
+  /// Sends audio data to the `libretro` frontend.
+  fn upload_audio_sample(&mut self, left: i16, right: i16);
+
+  /// Sends video data to the `libretro` frontend.
+  /// Must not be called if hardware rendering is used;
+  /// call `use_hardware_frame_buffer` instead.
+  fn upload_video_frame(&mut self, frame: &[u8], width: c_uint, height: c_uint, pitch: usize);
+
+  /// Explicitly informs the `libretro` frontend to repeat the previous video frame.
+  /// Must only be called if [`env::Environment::get_can_dupe`] returns `true`.
+  fn repeat_video_frame(&mut self);
+
+  /// When using hardware rendering, informs the `libretro` frontend that core
+  /// has finished rendering to the frame buffer.
+  fn use_hardware_frame_buffer(&mut self, width: c_uint, height: c_uint);
+
+  /// Polls all input devices.
+  /// Must be called at least once on every call to [`Environment::run`]
+  fn poll_inputs(&mut self);
+
+  /// Returns true if the specified button is pressed, false otherwise.
+  fn is_joypad_button_pressed(&self, port: DevicePort, btn: JoypadButton) -> bool;
 }
 
-impl Runtime {
+#[derive(Clone, Debug)]
+pub struct FrontendRuntime {
+  audio_sample: non_null_retro_audio_sample_t,
+  audio_sample_batch: non_null_retro_audio_sample_batch_t,
+  input_poll: non_null_retro_input_poll_t,
+  input_state: non_null_retro_input_state_t,
+  video_refresh: non_null_retro_video_refresh_t,
+}
+
+impl FrontendRuntime {
   pub fn new(
-    audio_sample: retro_audio_sample_t,
-    audio_sample_batch: retro_audio_sample_batch_t,
-    input_state: retro_input_state_t,
-    video_refresh: retro_video_refresh_t,
-  ) -> Runtime {
-    Runtime {
+    audio_sample: non_null_retro_audio_sample_t,
+    audio_sample_batch: non_null_retro_audio_sample_batch_t,
+    input_poll: non_null_retro_input_poll_t,
+    input_state: non_null_retro_input_state_t,
+    video_refresh: non_null_retro_video_refresh_t,
+  ) -> FrontendRuntime {
+    FrontendRuntime {
       audio_sample,
       audio_sample_batch,
+      input_poll,
       input_state,
       video_refresh,
     }
   }
+}
 
-  /// Sends audio data to the `libretro` frontend.
-  pub fn upload_audio_frame(&self, frame: &[i16]) -> usize {
-    let cb = self
-      .audio_sample_batch
-      .expect("`upload_audio_frame` called without registering an `audio_sample_batch` callback");
-
-    unsafe { cb(frame.as_ptr(), frame.len() / 2) }
+impl Runtime for FrontendRuntime {
+  fn upload_audio_frame(&mut self, frame: &[i16]) -> usize {
+    unsafe { (self.audio_sample_batch)(frame.as_ptr(), frame.len() / 2) }
   }
 
-  /// Sends audio data to the `libretro` frontend.
-  pub fn upload_audio_sample(&self, left: i16, right: i16) {
-    let cb = self
-      .audio_sample
-      .expect("`upload_audio_sample` called without registering an `audio_sample` callback");
-
-    unsafe { cb(left, right) }
+  fn upload_audio_sample(&mut self, left: i16, right: i16) {
+    unsafe { (self.audio_sample)(left, right) }
   }
 
-  /// Sends video data to the `libretro` frontend.
-  pub fn upload_video_frame(&self, frame: &[u8], width: c_uint, height: c_uint, pitch: usize) {
-    let cb = self
-      .video_refresh
-      .expect("`upload_video_frame` called without registering a `video_refresh` callback");
+  fn upload_video_frame(&mut self, frame: &[u8], width: c_uint, height: c_uint, pitch: usize) {
+    unsafe { (self.video_refresh)(frame.as_ptr() as *const c_void, width, height, pitch) }
+  }
 
-    unsafe { cb(frame.as_ptr() as *const c_void, width, height, pitch) }
+  fn repeat_video_frame(&mut self) {
+    unsafe { (self.video_refresh)(::core::ptr::null(), 0, 0, 0) }
+  }
+
+  fn use_hardware_frame_buffer(&mut self, width: c_uint, height: c_uint) {
+    unsafe { (self.video_refresh)(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0) }
+  }
+
+  fn poll_inputs(&mut self) {
+    unsafe { (self.input_poll)() };
   }
 
   /// Returns true if the specified button is pressed, false otherwise.
-  pub fn is_joypad_button_pressed(&self, port: DevicePort, btn: JoypadButton) -> bool {
-    let cb = self
-      .input_state
-      .expect("`is_joypad_button_pressed` called without registering an `input_state` callback");
-
+  fn is_joypad_button_pressed(&self, port: DevicePort, btn: JoypadButton) -> bool {
     let port = c_uint::from(port.into_inner());
     let device = RETRO_DEVICE_JOYPAD;
     let index = 0;
     let id = btn.into();
-    unsafe { cb(port, device, index, id) != 0 }
+    unsafe { (self.input_state)(port, device, index, id) != 0 }
   }
 }
 
@@ -233,17 +272,19 @@ impl<T: Core> Instance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_system_av_info` API call.
-  pub fn on_get_system_av_info(&self, info: &mut retro_system_av_info) {
-    let system = self
-      .system
-      .as_ref()
-      .expect("`retro_get_system_av_info` called without a successful `retro_load_game` call. The frontend is not compliant");
-    *info = system.get_system_av_info(&mut self.environment()).into();
+  pub fn on_get_system_av_info(&mut self, info: &mut retro_system_av_info) {
+    debug_assert!(
+      self.system.is_some(),
+      "frontend called retro_get_system_av_info before retro_load_game"
+    );
+    let env = unsafe { &mut self.environment_cb() };
+    let system = unsafe { self.system.as_mut().unwrap_unchecked() };
+    *info = system.get_system_av_info(env).into();
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_init` API call.
   pub fn on_init(&self) {
-    T::init(&mut self.environment());
+    T::init(unsafe { &mut self.environment_cb() });
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_deinit` API call.
@@ -290,50 +331,39 @@ impl<T: Core> Instance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
-  pub fn on_set_controller_port_device(&mut self, port: c_uint, device: c_uint) {
-    if let Ok(device) = device.try_into() {
-      if let Ok(port_num) = u8::try_from(port) {
-        let mut env = self.environment();
-        let port = DevicePort::new(port_num);
-        self.core_mut(|core| core.set_controller_port_device(&mut env, port, device))
-      }
-    }
+  pub fn on_set_controller_port_device(&mut self, port: DevicePort, device: DeviceType) {
+    let mut env = unsafe { self.environment_cb() };
+    self.core_mut(|core| {
+      let _ = core.set_controller_port_device(&mut env, port, device);
+    })
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_reset` API call.
   pub fn on_reset(&mut self) {
-    let mut env = self.environment();
+    let mut env = unsafe { self.environment_cb() };
     self.core_mut(|core| core.reset(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_run` API call.
   pub fn on_run(&mut self) {
-    // `input_poll` is required to be called once per `retro_run`.
-    self.input_poll();
+    let mut env = unsafe { self.environment_cb() };
 
-    let mut env = self.environment();
+    let mut runtime = unsafe {
+      FrontendRuntime::new(
+        self.audio_sample_cb(),
+        self.audio_sample_batch_cb(),
+        self.input_poll_cb(),
+        self.input_state_cb(),
+        self.video_refresh_cb(),
+      )
+    };
 
-    let runtime = Runtime::new(
-      self.audio_sample,
-      self.audio_sample_batch,
-      self.input_state,
-      self.video_refresh,
-    );
-
-    self.core_mut(|core| core.run(&mut env, &runtime));
-  }
-
-  fn input_poll(&mut self) {
-    let cb = self
-      .input_poll
-      .expect("`on_run` called without registering an `input_poll` callback");
-
-    unsafe { cb() }
+    self.core_mut(|core| core.run(&mut env, &mut runtime));
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_serialize_size` API call.
   pub fn on_serialize_size(&self) -> usize {
-    let mut env = self.environment();
+    let mut env = unsafe { self.environment_cb() };
     self.core_ref(|core| core.serialize_size(&mut env))
   }
 
@@ -341,7 +371,7 @@ impl<T: Core> Instance<T> {
   pub fn on_serialize(&self, data: *mut (), size: usize) -> bool {
     unsafe {
       let data = ::core::slice::from_raw_parts_mut(data as *mut u8, size);
-      let mut env = self.environment();
+      let mut env = self.environment_cb();
       self.core_ref(|core| core.serialize(&mut env, data).is_ok())
     }
   }
@@ -350,14 +380,14 @@ impl<T: Core> Instance<T> {
   pub fn on_unserialize(&mut self, data: *const (), size: usize) -> bool {
     unsafe {
       let data = ::core::slice::from_raw_parts(data as *const u8, size);
-      let mut env = self.environment();
+      let mut env = self.environment_cb();
       self.core_mut(|core| core.unserialize(&mut env, data).is_ok())
     }
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_cheat_reset` API call.
   pub fn on_cheat_reset(&mut self) {
-    let mut env = self.environment();
+    let mut env = unsafe { self.environment_cb() };
     self.core_mut(|core| core.cheat_reset(&mut env))
   }
 
@@ -367,9 +397,11 @@ impl<T: Core> Instance<T> {
   /// `code` must be a valid argument to [`CStr::from_ptr`].
   pub unsafe fn on_cheat_set(&mut self, index: c_uint, enabled: bool, code: *const c_char) {
     unsafe {
-      let code = CStr::from_ptr(code).to_str().expect("`code` contains invalid data");
-      let mut env = self.environment();
-      self.core_mut(|core| core.cheat_set(&mut env, index, enabled, code))
+      let code = CStr::from_ptr(code);
+      let mut env = self.environment_cb();
+      self.core_mut(|core| {
+        let _ = core.cheat_set(&mut env, index, enabled, code);
+      })
     }
   }
 
@@ -378,7 +410,7 @@ impl<T: Core> Instance<T> {
   /// # Safety
   /// `game` must remain valid until [`Instance::on_unload_game`] is called.
   pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
-    let mut env = self.environment();
+    let mut env = self.environment_cb();
     let game = game.as_ref().map_or_else(Game::default, Game::from);
     self.system = T::load_game(&mut env, game).ok();
     self.system.is_some()
@@ -386,43 +418,96 @@ impl<T: Core> Instance<T> {
 
   /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
   pub fn on_load_game_special(&mut self, game_type: GameType, info: &retro_game_info, _num_info: usize) -> bool {
-    let mut env = self.environment();
+    let mut env = unsafe { self.environment_cb() };
     self.system = T::load_game_special(&mut env, game_type, info.into()).ok();
     self.system.is_some()
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_unload_game` API call.
   pub fn on_unload_game(&mut self) {
-    let mut env = self.environment();
+    let mut env = unsafe { self.environment_cb() };
     self.core_mut(|core| core.unload_game(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
   pub fn on_get_region(&self) -> c_uint {
+    let mut env = unsafe { self.environment_cb() };
     let system = self.system.as_ref().expect("`on_get_region` called without a game loaded.");
-    c_uint::from(system.get_region(&mut self.environment()))
+    c_uint::from(system.get_region(&mut env))
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.
   pub fn on_get_memory_data(&mut self, id: MemoryType) -> *mut () {
-    let mut env = self.environment();
-    self.core_mut(|core| {
+    let mut env = unsafe { self.environment_cb() };
+    self.core_ref(|core| {
       core
         .get_memory_data(&mut env, id)
+        .ok()
         .map_or_else(std::ptr::null_mut, |data| data.as_mut_ptr() as *mut ())
     })
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
   pub fn on_get_memory_size(&mut self, id: MemoryType) -> usize {
-    let mut env = self.environment();
-    self.core_mut(|core| core.get_memory_data(&mut env, id).map_or(0, |data| data.len()))
+    let mut env = unsafe { self.environment_cb() };
+    self.core_ref(|core| core.get_memory_size(&mut env, id).unwrap_or(0))
   }
 
   #[inline]
   #[doc(hidden)]
-  fn environment(&self) -> env::EnvironmentPtr {
-    self.environment.expect("unable to retrieve the environment callback")
+  unsafe fn audio_sample_cb(&self) -> non_null_retro_audio_sample_t {
+    debug_assert!(
+      self.audio_sample.is_some(),
+      "Frontend did not set retro_audio_sample_t callback."
+    );
+    return self.audio_sample.unwrap_unchecked();
+  }
+
+  #[inline]
+  #[doc(hidden)]
+  unsafe fn audio_sample_batch_cb(&self) -> non_null_retro_audio_sample_batch_t {
+    debug_assert!(
+      self.audio_sample.is_some(),
+      "frontend did not set retro_audio_sample_batch_t callback"
+    );
+    return self.audio_sample_batch.unwrap_unchecked();
+  }
+
+  #[inline]
+  #[doc(hidden)]
+  unsafe fn input_poll_cb(&self) -> non_null_retro_input_poll_t {
+    debug_assert!(self.input_poll.is_some(), "frontend did not set retro_input_poll_t callback");
+    return self.input_poll.unwrap_unchecked();
+  }
+
+  #[inline]
+  #[doc(hidden)]
+  unsafe fn input_state_cb(&self) -> non_null_retro_input_state_t {
+    debug_assert!(
+      self.input_state.is_some(),
+      "frontend did not set retro_input_state_t callback"
+    );
+    return self.input_state.unwrap_unchecked();
+  }
+
+  #[inline]
+  #[doc(hidden)]
+  unsafe fn video_refresh_cb(&self) -> non_null_retro_video_refresh_t {
+    debug_assert!(
+      self.video_refresh.is_some(),
+      "frontend did not set retro_video_refresh_t callback"
+    );
+    return self.video_refresh.unwrap_unchecked();
+  }
+
+  #[inline]
+  #[doc(hidden)]
+  unsafe fn environment_cb(&self) -> env::EnvironmentPtr {
+    debug_assert!(
+      self.environment.is_some(),
+      "frontend did not set retro_environment_t callback"
+    );
+    self.environment.unwrap_unchecked()
   }
 
   #[inline]
@@ -486,12 +571,12 @@ macro_rules! libretro_core {
 
       #[no_mangle]
       extern "C" fn retro_get_system_av_info(info: &mut retro_system_av_info) {
-        instance_ref(|instance| instance.on_get_system_av_info(info))
+        instance_mut(|instance| instance.on_get_system_av_info(info))
       }
 
       #[no_mangle]
       extern "C" fn retro_init() {
-        instance_ref(|instance| instance.on_init())
+        instance_mut(|instance| instance.on_init())
       }
 
       #[no_mangle]
@@ -530,7 +615,7 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_set_controller_port_device(port: c_uint, device: c_uint) {
+      extern "C" fn retro_set_controller_port_device(port: DevicePort, device: DeviceType) {
         instance_mut(|instance| instance.on_set_controller_port_device(port, device))
       }
 

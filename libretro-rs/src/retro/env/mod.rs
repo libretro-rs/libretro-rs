@@ -295,5 +295,5 @@ impl<T> UnloadGame for T where T: Environment {}
 pub trait GetMemoryData: Environment {}
 impl<T> GetMemoryData for T where T: Environment {}
 
-pub trait GetMemorySizeEnvironment: Environment {}
-impl<T> GetMemorySizeEnvironment for T where T: Environment {}
+pub trait GetMemorySize: Environment {}
+impl<T> GetMemorySize for T where T: Environment {}
