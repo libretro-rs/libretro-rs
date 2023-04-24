@@ -4,6 +4,12 @@ use ::core::ffi::*;
 use ::core::ops::*;
 
 #[allow(unused_variables)]
+/// A libretro core.
+///
+/// Each of the methods and associated functions corresponds to a C function in
+/// the libretro API, with additional parameters for the frontend-provided callbacks.
+/// Some methods return [`Result`] despite the corresponding C function having no
+/// return value so that implementers can use the `?` operator.
 pub trait Core: Sized {
   /// Called during `retro_set_environment`.
   fn set_environment(env: &mut impl env::SetEnvironment) {}
@@ -23,11 +29,14 @@ pub trait Core: Sized {
   }
 
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
+  ///
+  /// This function returns [`Result`] to make error handling easier.
+  /// The libretro function `retro_set_controller_port_device` does not return a result to the frontend.
   fn set_controller_port_device(
     &mut self,
     env: &mut impl env::SetPortDevice,
     port: DevicePort,
-    device: DeviceType,
+    device: DeviceTypeId,
   ) -> Result<()> {
     Err(CoreError::new())
   }
@@ -59,6 +68,10 @@ pub trait Core: Sized {
 
   fn cheat_reset(&mut self, env: &mut impl env::CheatReset) {}
 
+  /// Called when a user attempts to apply or remove a cheat code.
+  ///
+  /// This function returns [`Result`] to make error handling easier.
+  /// The libretro function `retro_cheat_set` does not return a result to the frontend.
   fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: c_uint, enabled: bool, code: &CStr) -> Result<()> {
     Err(CoreError::new())
   }
@@ -331,7 +344,7 @@ impl<T: Core> Instance<T> {
   }
 
   /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
-  pub fn on_set_controller_port_device(&mut self, port: DevicePort, device: DeviceType) {
+  pub fn on_set_controller_port_device(&mut self, port: DevicePort, device: DeviceTypeId) {
     let mut env = unsafe { self.environment_cb() };
     self.core_mut(|core| {
       let _ = core.set_controller_port_device(&mut env, port, device);
@@ -615,7 +628,7 @@ macro_rules! libretro_core {
       }
 
       #[no_mangle]
-      extern "C" fn retro_set_controller_port_device(port: DevicePort, device: DeviceType) {
+      extern "C" fn retro_set_controller_port_device(port: DevicePort, device: DeviceTypeId) {
         instance_mut(|instance| instance.on_set_controller_port_device(port, device))
       }
 

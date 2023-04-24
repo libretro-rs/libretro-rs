@@ -2,9 +2,12 @@ use ::core::ffi::*;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct DeviceType(c_uint);
+/// A numeric ID for a libretro device type provided by the frontend.
+/// An enum is also provided for the standard types listed in the libretro API:
+/// see [`DeviceType`].
+pub struct DeviceTypeId(c_uint);
 
-impl DeviceType {
+impl DeviceTypeId {
   pub fn new(id: c_uint) -> Self {
     Self(id)
   }
@@ -14,21 +17,21 @@ impl DeviceType {
   }
 }
 
-impl From<c_uint> for DeviceType {
+impl From<c_uint> for DeviceTypeId {
   fn from(port_number: c_uint) -> Self {
     Self::new(port_number)
   }
 }
 
-impl From<DeviceType> for c_uint {
-  fn from(id: DeviceType) -> Self {
+impl From<DeviceTypeId> for c_uint {
+  fn from(id: DeviceTypeId) -> Self {
     id.into_inner()
   }
 }
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Device {
+pub enum DeviceType {
   #[default]
   None = 0,
   Joypad = 1,
@@ -39,11 +42,11 @@ pub enum Device {
   Pointer = 6,
 }
 
-impl TryFrom<c_uint> for Device {
+impl TryFrom<DeviceTypeId> for DeviceType {
   type Error = ();
 
-  fn try_from(val: c_uint) -> Result<Self, Self::Error> {
-    match val {
+  fn try_from(val: DeviceTypeId) -> Result<Self, Self::Error> {
+    match val.into_inner() {
       0 => Ok(Self::None),
       1 => Ok(Self::Joypad),
       2 => Ok(Self::Mouse),
