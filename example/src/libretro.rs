@@ -45,7 +45,8 @@ impl LibretroCore {
     self.frame_buffer[index + 3] = 0xff;
   }
 
-  pub fn update_input(&mut self, runtime: &mut impl Runtime) {
+  pub fn update_input(&mut self, runtime: &mut impl Runtime) -> InputsPolled {
+    let inputs_polled = runtime.poll_inputs();
     for key in keyboard::Keyboard::keys() {
       // todo: chip-8 has a very clunky mapping to a controller.
 
@@ -57,6 +58,7 @@ impl LibretroCore {
         self.cpu.keyboard.set_key_state(key, keyboard::KeyState::Released)
       }
     }
+    inputs_polled
   }
 }
 
@@ -97,13 +99,14 @@ impl Core for LibretroCore {
     todo!()
   }
 
-  fn run(&mut self, _env: &mut impl env::Run, runtime: &mut impl Runtime) {
-    self.update_input(runtime);
+  fn run(&mut self, _env: &mut impl env::Run, runtime: &mut impl Runtime) -> InputsPolled {
+    let inputs_polled = self.update_input(runtime);
 
     self.cpu.step_for(25);
 
     self.render_audio(runtime);
     self.render_video(runtime);
+    inputs_polled
   }
 }
 

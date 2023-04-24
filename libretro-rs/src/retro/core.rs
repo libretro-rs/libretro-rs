@@ -44,9 +44,11 @@ pub trait Core: Sized {
   /// Called when a player resets their game.
   fn reset(&mut self, env: &mut impl env::Reset);
 
-  /// Called continuously once the core is initialized and a game is loaded. The core is expected to advance emulation
-  /// by a single frame before returning.
-  fn run(&mut self, env: &mut impl env::Run, runtime: &mut impl Runtime);
+  /// Called continuously once the core is initialized and a game is loaded.
+  ///
+  /// The core is expected to advance emulation by a single frame before returning.
+  /// The core must call [`Runtime::poll_inputs`] at least once.
+  fn run(&mut self, env: &mut impl env::Run, runtime: &mut impl Runtime) -> InputsPolled;
 
   /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
   /// not exceed the size returned here for subsequent saves.
@@ -180,7 +182,7 @@ pub trait Runtime {
 
   /// Polls all input devices.
   /// Must be called at least once on every call to [`Environment::run`]
-  fn poll_inputs(&mut self);
+  fn poll_inputs(&mut self) -> InputsPolled;
 
   /// Returns true if the specified button is pressed, false otherwise.
   fn is_joypad_button_pressed(&self, port: DevicePort, btn: JoypadButton) -> bool;
@@ -234,8 +236,9 @@ impl Runtime for FrontendRuntime {
     unsafe { (self.video_refresh)(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0) }
   }
 
-  fn poll_inputs(&mut self) {
+  fn poll_inputs(&mut self) -> InputsPolled {
     unsafe { (self.input_poll)() };
+    InputsPolled(())
   }
 
   /// Returns true if the specified button is pressed, false otherwise.
@@ -247,6 +250,8 @@ impl Runtime for FrontendRuntime {
     unsafe { (self.input_state)(port, device, index, id) != 0 }
   }
 }
+
+pub struct InputsPolled(pub(crate) ());
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default)]
