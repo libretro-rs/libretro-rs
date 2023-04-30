@@ -73,7 +73,7 @@ impl Core for LibretroCore {
     SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), ext!["png"])
   }
 
-  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self> {
+  fn load_game(env: &mut impl env::LoadGame<Self>, game: Game) -> Result<Self> {
     env.set_pixel_format(PixelFormat::XRGB8888)?;
     match game {
       Game::Data { data, .. } => {
@@ -99,7 +99,7 @@ impl Core for LibretroCore {
     todo!()
   }
 
-  fn run(&mut self, _env: &mut impl env::Run, runtime: &mut impl Runtime) -> InputsPolled {
+  fn run(&mut self, _env: &mut impl env::Run<Self>, runtime: &mut impl Runtime) -> InputsPolled {
     let inputs_polled = self.update_input(runtime);
 
     self.cpu.step_for(25);

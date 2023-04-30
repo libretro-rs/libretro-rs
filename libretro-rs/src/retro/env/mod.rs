@@ -1,38 +1,10 @@
-mod callback_environment;
 mod convert;
-mod null_environment;
 
 use crate::ffi::*;
 use crate::retro::*;
-use ::core::ffi::*;
-pub use callback_environment::*;
 pub use convert::*;
-pub use null_environment::*;
 
-pub type Result<T> = ::core::result::Result<T, CommandError>;
-
-pub trait EnvironmentCallback {
-  unsafe fn get(&self, cmd: c_uint, data: &mut impl CommandData) -> Result<()>;
-
-  /// Directly invokes the underlying [retro_environment_t] in a "set" fashion.
-  ///
-  /// # Safety
-  /// The environment command **must not** modify `data`.
-  ///
-  /// See `libretro.h` for the requirements of environment commands.
-  /// See [CommandData] for more information about type requirements.
-  unsafe fn set(&mut self, cmd: c_uint, data: &impl CommandData) -> Result<()>;
-
-  /// Directly invokes the underlying [retro_environment_t] in a "command" fashion.
-  /// Returns `Some(T)` iff the command succeeds.
-  ///
-  /// `data` is transformed into a `T` value prior to calling the callback.
-  ///
-  /// # Safety
-  /// See `libretro.h` for the requirements of environment commands.
-  /// See [CommandData] for more information about type requirements.
-  unsafe fn cmd(&mut self, cmd: c_uint, data: &mut impl CommandData) -> Result<()>;
-}
+pub type Result<T> = core::result::Result<T, CommandError>;
 
 /// Exposes the [`retro_environment_t`] callback in an idiomatic fashion.
 /// Each of the `RETRO_ENVIRONMENT_*` keys will eventually have a corresponding method here.
@@ -40,6 +12,8 @@ pub trait EnvironmentCallback {
 /// Until that is accomplished, the keys are available in [`libretro_rs::ffi`] and can be used
 /// manually with the various `*_raw` methods.
 pub trait Environment: Sized {
+  fn get_ptr(&self) -> non_null_retro_environment_t;
+
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
   ///
   /// # Safety
@@ -48,7 +22,10 @@ pub trait Environment: Sized {
   unsafe fn get<C, R>(&self, cmd: C) -> Result<R>
   where
     C: Into<c_uint>,
-    R: Default + CommandData;
+    R: Default + CommandData,
+  {
+    self.get_with(cmd, R::default())
+  }
 
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
   ///
@@ -61,18 +38,29 @@ pub trait Environment: Sized {
   where
     C: Into<c_uint>,
     D: Into<R>,
-    R: CommandData;
+    R: CommandData,
+  {
+    let mut data = data.into();
+    with_mut(self.get_ptr(), cmd.into(), &mut data).map(|_| data)
+  }
 
   unsafe fn set<C, D>(&mut self, cmd: C, data: &D) -> Result<()>
   where
     C: Into<c_uint>,
-    D: CommandData;
+    D: CommandData,
+  {
+    with_ref(self.get_ptr(), cmd.into(), data)
+  }
 
   unsafe fn cmd<C, D, R>(&mut self, cmd: C, data: D) -> Result<R>
   where
     C: Into<c_uint>,
     D: Into<R>,
-    R: CommandData;
+    R: CommandData,
+  {
+    let mut data = data.into();
+    with_mut(self.get_ptr(), cmd.into(), &mut data).map(|_| data)
+  }
 
   /// Sets screen rotation of graphics.
   fn set_rotation(&mut self, rotation: ScreenRotation) -> Result<()> {
@@ -129,7 +117,7 @@ pub trait Environment: Sized {
   fn get_variable(&self, key: &impl AsRef<CStr>) -> Result<Option<&CStr>> {
     let variable = retro_variable {
       key: key.as_ref().as_ptr(),
-      value: ::core::ptr::null(),
+      value: core::ptr::null(),
     };
     unsafe {
       self
@@ -152,56 +140,9 @@ pub trait Environment: Sized {
   }
 }
 
-impl<T> Environment for T
-where
-  T: EnvironmentCallback,
-{
-  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
-  ///
-  /// # Safety
-  /// See `libretro.h` for the requirements of environment commands.
-  /// See [CommandData] for more information about type requirements.
-  unsafe fn get<C, R>(&self, cmd: C) -> Result<R>
-  where
-    C: Into<c_uint>,
-    R: Default + CommandData,
-  {
-    self.get_with(cmd, R::default())
-  }
-
-  /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
-  ///
-  /// `data` is transformed into a `T` value prior to calling the callback.
-  ///
-  /// # Safety
-  /// See `libretro.h` for the requirements of environment commands.
-  /// See [CommandData] for more information about type requirements.
-  unsafe fn get_with<C, D, R>(&self, cmd: C, data: D) -> Result<R>
-  where
-    C: Into<c_uint>,
-    D: Into<R>,
-    R: CommandData,
-  {
-    let mut data = data.into();
-    EnvironmentCallback::get(self, cmd.into(), &mut data).map(|_| data)
-  }
-
-  unsafe fn set<C, D>(&mut self, cmd: C, data: &D) -> Result<()>
-  where
-    C: Into<c_uint>,
-    D: CommandData,
-  {
-    EnvironmentCallback::set(self, cmd.into(), data)
-  }
-
-  unsafe fn cmd<C, D, R>(&mut self, cmd: C, data: D) -> Result<R>
-  where
-    C: Into<c_uint>,
-    D: Into<R>,
-    R: CommandData,
-  {
-    let mut data = data.into();
-    EnvironmentCallback::cmd(self, cmd.into(), &mut data).map(|_| data)
+impl Environment for non_null_retro_environment_t {
+  fn get_ptr(&self) -> non_null_retro_environment_t {
+    *self
   }
 }
 
@@ -221,7 +162,7 @@ impl<T> SetPortDevice for T where T: Environment {}
 pub trait Reset: Environment {}
 impl<T> Reset for T where T: Environment {}
 
-pub trait Run: Environment {
+pub trait Run<C: Core>: Environment {
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   fn shutdown(&mut self) -> Result<()> {
     unsafe { self.cmd(RETRO_ENVIRONMENT_SHUTDOWN, ()) }
@@ -230,8 +171,11 @@ pub trait Run: Environment {
   fn set_geometry(&mut self, geometry: &GameGeometry) -> Result<()> {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_GEOMETRY, geometry) }
   }
+
+  fn gl_context(&mut self, gl_enabled: &GLRenderEnabled) -> &mut C::Context
+  where
+    C: GLCore;
 }
-impl<T> Run for T where T: Environment {}
 
 pub trait SerializeSize: Environment {}
 impl<T> SerializeSize for T where T: Environment {}
@@ -248,7 +192,10 @@ impl<T> CheatReset for T where T: Environment {}
 pub trait CheatSet: Environment {}
 impl<T> CheatSet for T where T: Environment {}
 
-pub trait LoadGame: Environment {
+pub trait LoadGame<T>: Environment
+where
+  T: Core,
+{
   /// Gives a hint to the frontend how demanding this implementation is on a system. E.g. Reporting
   /// a level of 2 means this implementation should run decently on all frontends of level 2 and up.
   ///
@@ -269,8 +216,19 @@ pub trait LoadGame: Environment {
   fn set_pixel_format(&mut self, format: PixelFormat) -> Result<()> {
     GetAvInfo::set_pixel_format(self, format)
   }
+
+  fn set_hw_render_gl(&mut self, options: GLOptions) -> Result<GLRenderEnabled>
+  where
+    T: GLCore;
 }
-impl<T> LoadGame for T where T: Environment {}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Origin {
+  #[default]
+  TopLeft,
+  BottomRight,
+}
 
 pub trait GetAvInfo: Environment {
   /// Sets the internal pixel format used by the implementation.
@@ -297,3 +255,23 @@ impl<T> GetMemoryData for T where T: Environment {}
 
 pub trait GetMemorySize: Environment {}
 impl<T> GetMemorySize for T where T: Environment {}
+
+unsafe fn with_ref(cb: non_null_retro_environment_t, cmd: c_uint, data: &impl CommandData) -> Result<()> {
+  if cb(cmd, data as *const _ as *mut c_void) {
+    Ok(())
+  } else {
+    Err(CommandError::new())
+  }
+}
+
+unsafe fn with_mut(cb: non_null_retro_environment_t, cmd: c_uint, data: &mut impl CommandData) -> Result<()> {
+  if cb(cmd, data as *mut _ as *mut c_void) {
+    Ok(())
+  } else {
+    Err(CommandError::new())
+  }
+}
+
+pub extern "C" fn null_environment(_cmd: c_uint, _data: *mut c_void) -> bool {
+  false
+}

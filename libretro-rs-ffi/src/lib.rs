@@ -5,7 +5,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/libretro.rs"));
 
-use core::ffi::*;
+pub use core::ffi::*;
 
 impl From<&CStr> for retro_variable {
   fn from(c_str: &CStr) -> Self {
@@ -22,6 +22,10 @@ pub type non_null_retro_environment_t = unsafe extern "C" fn(cmd: c_uint, data: 
 pub type non_null_retro_input_poll_t = unsafe extern "C" fn();
 pub type non_null_retro_input_state_t = unsafe extern "C" fn(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16;
 pub type non_null_retro_video_refresh_t = unsafe extern "C" fn(data: *const c_void, width: c_uint, height: c_uint, pitch: usize);
+
+pub type non_null_retro_hw_get_current_framebuffer_t = unsafe extern "C" fn() -> usize;
+pub type non_null_retro_hw_get_proc_address_t = unsafe extern "C" fn(sym: *const c_char) -> retro_proc_address_t;
+pub type non_null_retro_hw_context_reset_t = unsafe extern "C" fn();
 
 pub const RETRO_HW_FRAME_BUFFER_VALID: *const c_void = sptr::invalid(usize::MAX);
 

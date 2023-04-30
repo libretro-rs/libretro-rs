@@ -1,5 +1,5 @@
 pub mod av;
-pub mod core;
+pub mod cores;
 pub mod device;
 pub mod env;
 pub mod error;
@@ -10,7 +10,7 @@ pub mod mem;
 pub mod str;
 
 pub use self::av::*;
-pub use self::core::*;
+pub use self::cores::*;
 pub use self::device::*;
 // env deliberately omitted
 pub use self::error::*;
