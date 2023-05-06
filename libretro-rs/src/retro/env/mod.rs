@@ -11,7 +11,7 @@ pub type Result<T> = core::result::Result<T, CommandError>;
 ///
 /// Until that is accomplished, the keys are available in [`libretro_rs::ffi`] and can be used
 /// manually with the various `*_raw` methods.
-pub trait Environment: Sized {
+pub trait Environment<T: Core>: Sized {
   fn get_ptr(&self) -> non_null_retro_environment_t;
 
   /// Directly invokes the underlying [retro_environment_t] in a "get" fashion.
@@ -140,29 +140,29 @@ pub trait Environment: Sized {
   }
 }
 
-impl Environment for non_null_retro_environment_t {
+impl<C: Core> Environment<C> for non_null_retro_environment_t {
   fn get_ptr(&self) -> non_null_retro_environment_t {
     *self
   }
 }
 
-pub trait SetEnvironment: Environment {
+pub trait SetEnvironment<C: Core>: Environment<C> {
   fn set_support_no_game(&mut self, data: bool) -> Result<()> {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &data) }
   }
 }
-impl<T> SetEnvironment for T where T: Environment {}
+impl<C: Core, T: Environment<C>> SetEnvironment<C> for T {}
 
-pub trait Init: Environment {}
-impl<T> Init for T where T: Environment {}
+pub trait Init<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> Init<C> for T {}
 
-pub trait SetPortDevice: Environment {}
-impl<T> SetPortDevice for T where T: Environment {}
+pub trait SetPortDevice<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> SetPortDevice<C> for T {}
 
-pub trait Reset: Environment {}
-impl<T> Reset for T where T: Environment {}
+pub trait Reset<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> Reset<C> for T {}
 
-pub trait Run<C: Core>: Environment {
+pub trait Run<C: Core>: Environment<C> {
   /// Requests that the frontend shut down. The frontend can refuse to do this, and return false.
   fn shutdown(&mut self) -> Result<()> {
     unsafe { self.cmd(RETRO_ENVIRONMENT_SHUTDOWN, ()) }
@@ -177,25 +177,22 @@ pub trait Run<C: Core>: Environment {
     C: GLCore;
 }
 
-pub trait SerializeSize: Environment {}
-impl<T> SerializeSize for T where T: Environment {}
+pub trait SerializeSize<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> SerializeSize<C> for T {}
 
-pub trait Serialize: Environment {}
-impl<T> Serialize for T where T: Environment {}
+pub trait Serialize<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> Serialize<C> for T {}
 
-pub trait Unserialize: Environment {}
-impl<T> Unserialize for T where T: Environment {}
+pub trait Unserialize<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> Unserialize<C> for T {}
 
-pub trait CheatReset: Environment {}
-impl<T> CheatReset for T where T: Environment {}
+pub trait CheatReset<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> CheatReset<C> for T {}
 
-pub trait CheatSet: Environment {}
-impl<T> CheatSet for T where T: Environment {}
+pub trait CheatSet<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> CheatSet<C> for T {}
 
-pub trait LoadGame<T>: Environment
-where
-  T: Core,
-{
+pub trait LoadGame<C: Core>: Environment<C> {
   /// Gives a hint to the frontend how demanding this implementation is on a system. E.g. Reporting
   /// a level of 2 means this implementation should run decently on all frontends of level 2 and up.
   ///
@@ -219,7 +216,7 @@ where
 
   fn set_hw_render_gl(&mut self, options: GLOptions) -> Result<GLRenderEnabled>
   where
-    T: GLCore;
+    C: GLCore;
 }
 
 #[non_exhaustive]
@@ -230,7 +227,7 @@ pub enum Origin {
   BottomRight,
 }
 
-pub trait GetAvInfo: Environment {
+pub trait GetAvInfo<C: Core>: Environment<C> {
   /// Sets the internal pixel format used by the implementation.
   /// The default pixel format is RETRO_PIXEL_FORMAT_0RGB1555.
   /// This pixel format however, is deprecated (see enum retro_pixel_format).
@@ -239,22 +236,22 @@ pub trait GetAvInfo: Environment {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &(format as c_int)) }
   }
 }
-impl<T> GetAvInfo for T where T: Environment {}
+impl<C: Core, T: Environment<C>> GetAvInfo<C> for T {}
 
-pub trait GetRegion: Environment {}
-impl<T> GetRegion for T where T: Environment {}
+pub trait GetRegion<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> GetRegion<C> for T {}
 
-pub trait LoadGameSpecial: Environment {}
-impl<T> LoadGameSpecial for T where T: Environment {}
+pub trait LoadGameSpecial<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> LoadGameSpecial<C> for T {}
 
-pub trait UnloadGame: Environment {}
-impl<T> UnloadGame for T where T: Environment {}
+pub trait UnloadGame<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> UnloadGame<C> for T {}
 
-pub trait GetMemoryData: Environment {}
-impl<T> GetMemoryData for T where T: Environment {}
+pub trait GetMemoryData<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> GetMemoryData<C> for T {}
 
-pub trait GetMemorySize: Environment {}
-impl<T> GetMemorySize for T where T: Environment {}
+pub trait GetMemorySize<C: Core>: Environment<C> {}
+impl<C: Core, T: Environment<C>> GetMemorySize<C> for T {}
 
 unsafe fn with_ref(cb: non_null_retro_environment_t, cmd: c_uint, data: &impl CommandData) -> Result<()> {
   if cb(cmd, data as *const _ as *mut c_void) {

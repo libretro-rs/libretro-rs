@@ -88,14 +88,14 @@ impl Core for LibretroCore {
     }
   }
 
-  fn get_system_av_info(&self, _env: &mut impl env::GetAvInfo) -> SystemAVInfo {
+  fn get_system_av_info(&self, _env: &mut impl env::GetAvInfo<Self>) -> SystemAVInfo {
     const WINDOW_SCALE: u16 = 8;
     const WINDOW_WIDTH: u16 = WINDOW_SCALE * display::WIDTH as u16;
     const WINDOW_HEIGHT: u16 = WINDOW_SCALE * display::HEIGHT as u16;
     SystemAVInfo::default_timings(GameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
   }
 
-  fn reset(&mut self, _env: &mut impl env::Reset) {
+  fn reset(&mut self, _env: &mut impl env::Reset<Self>) {
     todo!()
   }
 

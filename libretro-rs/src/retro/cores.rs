@@ -12,19 +12,19 @@ use core::ops::*;
 /// return value so that implementers can use the `?` operator.
 pub trait Core: Sized {
   /// Called during `retro_set_environment`.
-  fn set_environment(env: &mut impl env::SetEnvironment) {}
+  fn set_environment(env: &mut impl env::SetEnvironment<Self>) {}
 
   /// Called during `retro_init`. This function is provided for the sake of completeness; it's generally redundant
   /// with [`Core::load_game`].
-  fn init(env: &mut impl env::Init) {}
+  fn init(env: &mut impl env::Init<Self>) {}
 
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
   fn get_system_info() -> SystemInfo;
 
-  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo) -> SystemAVInfo;
+  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo<Self>) -> SystemAVInfo;
 
-  fn get_region(&self, env: &mut impl env::GetRegion) -> Region {
+  fn get_region(&self, env: &mut impl env::GetRegion<Self>) -> Region {
     Region::NTSC
   }
 
@@ -34,7 +34,7 @@ pub trait Core: Sized {
   /// The libretro function `retro_set_controller_port_device` does not return a result to the frontend.
   fn set_controller_port_device(
     &mut self,
-    env: &mut impl env::SetPortDevice,
+    env: &mut impl env::SetPortDevice<Self>,
     port: DevicePort,
     device: DeviceTypeId,
   ) -> Result<()> {
@@ -42,7 +42,7 @@ pub trait Core: Sized {
   }
 
   /// Called when a player resets their game.
-  fn reset(&mut self, env: &mut impl env::Reset);
+  fn reset(&mut self, env: &mut impl env::Reset<Self>);
 
   /// Called continuously once the core is initialized and a game is loaded.
   ///
@@ -52,29 +52,29 @@ pub trait Core: Sized {
 
   /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
   /// not exceed the size returned here for subsequent saves.
-  fn serialize_size(&self, env: &mut impl env::SerializeSize) -> usize {
+  fn serialize_size(&self, env: &mut impl env::SerializeSize<Self>) -> usize {
     0
   }
 
   /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn serialize(&self, env: &mut impl env::Serialize, data: &mut [u8]) -> Result<()> {
+  fn serialize(&self, env: &mut impl env::Serialize<Self>, data: &mut [u8]) -> Result<()> {
     Err(CoreError::new())
   }
 
   /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
   /// bytes, where `size` is the value returned from `serialize_size`.
-  fn unserialize(&mut self, env: &mut impl env::Unserialize, data: &[u8]) -> Result<()> {
+  fn unserialize(&mut self, env: &mut impl env::Unserialize<Self>, data: &[u8]) -> Result<()> {
     Err(CoreError::new())
   }
 
-  fn cheat_reset(&mut self, env: &mut impl env::CheatReset) {}
+  fn cheat_reset(&mut self, env: &mut impl env::CheatReset<Self>) {}
 
   /// Called when a user attempts to apply or remove a cheat code.
   ///
   /// This function returns [`Result`] to make error handling easier.
   /// The libretro function `retro_cheat_set` does not return a result to the frontend.
-  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: c_uint, enabled: bool, code: &CStr) -> Result<()> {
+  fn cheat_set(&mut self, env: &mut impl env::CheatSet<Self>, index: c_uint, enabled: bool, code: &CStr) -> Result<()> {
     Err(CoreError::new())
   }
 
@@ -82,17 +82,17 @@ pub trait Core: Sized {
   /// required for the core to function properly.
   fn load_game(env: &mut impl env::LoadGame<Self>, game: Game) -> Result<Self>;
 
-  fn load_game_special(env: &mut impl env::LoadGameSpecial, game_type: GameType, info: Game) -> Result<Self> {
+  fn load_game_special(env: &mut impl env::LoadGameSpecial<Self>, game_type: GameType, info: Game) -> Result<Self> {
     Err(CoreError::new())
   }
 
-  fn unload_game(&mut self, env: &mut impl env::UnloadGame) {}
+  fn unload_game(&mut self, env: &mut impl env::UnloadGame<Self>) {}
 
-  fn get_memory_size(&self, env: &mut impl env::GetMemorySize, id: MemoryType) -> Result<usize> {
+  fn get_memory_size(&self, env: &mut impl env::GetMemorySize<Self>, id: MemoryType) -> Result<usize> {
     Err(CoreError::new())
   }
 
-  fn get_memory_data(&self, env: &mut impl env::GetMemoryData, id: MemoryType) -> Result<&mut [u8]> {
+  fn get_memory_data(&self, env: &mut impl env::GetMemoryData<Self>, id: MemoryType) -> Result<&mut [u8]> {
     Err(CoreError::new())
   }
 }
@@ -567,7 +567,7 @@ impl<C, G: Deinit> Deinit for InstanceEnvironment<C, G> {
   }
 }
 
-impl<C, G> env::Environment for InstanceEnvironment<C, G> {
+impl<C: Core, G> env::Environment<C> for InstanceEnvironment<C, G> {
   fn get_ptr(&self) -> non_null_retro_environment_t {
     unsafe { self.cb.unwrap_unchecked() }
   }
@@ -578,7 +578,6 @@ impl<C: Core> env::LoadGame<C> for InstanceEnvironment<C, NoGLData> {
   where
     C: GLCore,
   {
-    eprintln!("Error in set_hw_render_gl");
     Err(CommandError::new())
   }
 }
