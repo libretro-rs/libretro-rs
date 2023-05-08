@@ -171,11 +171,8 @@ pub trait Run<C: Core>: Environment<C> {
   fn set_geometry(&mut self, geometry: &GameGeometry) -> Result<()> {
     unsafe { self.set(RETRO_ENVIRONMENT_SET_GEOMETRY, geometry) }
   }
-
-  fn gl_context(&mut self, gl_enabled: &GLRenderEnabled) -> &mut C::Context
-  where
-    C: GLCore;
 }
+impl<C: Core, T: Environment<C>> Run<C> for T {}
 
 pub trait SerializeSize<C: Core>: Environment<C> {}
 impl<C: Core, T: Environment<C>> SerializeSize<C> for T {}
@@ -216,7 +213,7 @@ pub trait LoadGame<C: Core>: Environment<C> {
 
   fn set_hw_render_gl(&mut self, options: GLOptions) -> Result<GLRenderEnabled>
   where
-    C: GLCore;
+    C: GLRenderingCore;
 }
 
 #[non_exhaustive]

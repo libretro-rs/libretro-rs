@@ -97,14 +97,18 @@ pub trait Core: Sized {
   }
 }
 
-pub unsafe trait GLCore: Core {
-  type Context: GLContext<Self>;
+pub unsafe trait GLRenderingCore: Core {
+  fn context_reset(&mut self, callbacks: GLContextCallbacks);
 
-  unsafe fn create_context(&self, callbacks: GLContextCallbacks) -> Self::Context;
+  fn context_destroy(&mut self) {}
 }
 
-pub unsafe trait GLContext<T: GLCore> {
-  unsafe fn reset(&mut self, callbacks: GLContextCallbacks);
+pub unsafe trait GLContext<C: GLRenderingCore>: Sized {
+  unsafe fn create(callbacks: GLContextCallbacks, core: &mut C) -> Self;
+
+  unsafe fn reset(&mut self, callbacks: GLContextCallbacks, core: &mut C) {
+    *self = Self::create(callbacks, core);
+  }
 
   unsafe fn destroy(&mut self) {}
 }
@@ -338,9 +342,9 @@ where
   }
 }
 
-impl<C> Instance<C, InstanceGLData<C::Context>>
+impl<C> Instance<C, InstanceGLData>
 where
-  C: GLCore,
+  C: GLRenderingCore,
   Self: ValidInstance,
 {
   pub const fn new(context_reset: non_null_retro_hw_context_reset_t, context_destroy: non_null_retro_hw_context_reset_t) -> Self {
@@ -351,7 +355,6 @@ where
           context_reset,
           context_destroy,
           core_callbacks: None,
-          core_data: None,
         },
         phantom: core::marker::PhantomData,
       },
@@ -532,7 +535,7 @@ impl<C: Core, G> Instance<C, G> {
 
 pub trait ValidInstance {}
 impl<C: Core> ValidInstance for Instance<C, NoGLData> {}
-impl<C: GLCore> ValidInstance for Instance<C, InstanceGLData<C::Context>> {}
+impl<C: GLRenderingCore> ValidInstance for Instance<C, InstanceGLData> {}
 
 impl<C: Core> Instance<C, NoGLData> {
   pub fn on_context_destroy(&mut self) {}
@@ -540,23 +543,18 @@ impl<C: Core> Instance<C, NoGLData> {
   pub fn on_context_reset(&mut self) {}
 }
 
-impl<C> Instance<C, InstanceGLData<C::Context>>
+impl<C> Instance<C, InstanceGLData>
 where
-  C: GLCore,
+  C: GLRenderingCore,
   Self: ValidInstance,
 {
   pub unsafe fn on_context_destroy(&mut self) {
-    self.environment.gl.core_data.as_mut().unwrap_unchecked().destroy();
+    self.system.as_mut().unwrap_unchecked().context_destroy();
   }
 
   pub unsafe fn on_context_reset(&mut self) {
-    let core = self.system.as_ref().unwrap_unchecked();
     let callbacks = self.environment.gl.core_callbacks.unwrap_unchecked();
-    if let Some(context) = self.environment.gl.core_data.as_mut() {
-      context.reset(callbacks);
-    } else {
-      self.environment.gl.core_data = Some(core.create_context(callbacks));
-    }
+    self.system.as_mut().unwrap_unchecked().context_reset(callbacks);
   }
 }
 
@@ -576,16 +574,16 @@ impl<C: Core, G> env::Environment<C> for InstanceEnvironment<C, G> {
 impl<C: Core> env::LoadGame<C> for InstanceEnvironment<C, NoGLData> {
   fn set_hw_render_gl(&mut self, _options: GLOptions) -> env::Result<GLRenderEnabled>
   where
-    C: GLCore,
+    C: GLRenderingCore,
   {
     Err(CommandError::new())
   }
 }
 
-impl<C: GLCore> env::LoadGame<C> for InstanceEnvironment<C, InstanceGLData<C::Context>> {
+impl<C: GLRenderingCore> env::LoadGame<C> for InstanceEnvironment<C, InstanceGLData> {
   fn set_hw_render_gl(&mut self, options: GLOptions) -> env::Result<GLRenderEnabled>
   where
-    C: GLCore,
+    C: GLRenderingCore,
   {
     use crate::retro::env::Environment;
     let mut data: retro_hw_render_callback = options.into();
@@ -599,24 +597,6 @@ impl<C: GLCore> env::LoadGame<C> for InstanceEnvironment<C, InstanceGLData<C::Co
       });
     }
     Ok(GLRenderEnabled(()))
-  }
-}
-
-impl<C: Core> env::Run<C> for InstanceEnvironment<C, NoGLData> {
-  fn gl_context(&mut self, _gl_enabled: &GLRenderEnabled) -> &mut C::Context
-  where
-    C: GLCore,
-  {
-    unreachable!()
-  }
-}
-
-impl<C: GLCore> env::Run<C> for InstanceEnvironment<C, InstanceGLData<C::Context>> {
-  fn gl_context(&mut self, _gl_enabled: &GLRenderEnabled) -> &mut C::Context
-  where
-    C: GLCore,
-  {
-    unsafe { self.gl.core_data.as_mut().unwrap_unchecked() }
   }
 }
 
@@ -635,20 +615,18 @@ impl NoGLData {
 
 #[doc(hidden)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct InstanceGLData<T> {
+pub struct InstanceGLData {
   context_reset: non_null_retro_hw_context_reset_t,
   context_destroy: non_null_retro_hw_context_reset_t,
   core_callbacks: Option<GLContextCallbacks>,
-  core_data: Option<T>,
 }
 
-impl<T> InstanceGLData<T> {
+impl InstanceGLData {
   pub const fn new(context_reset: non_null_retro_hw_context_reset_t, context_destroy: non_null_retro_hw_context_reset_t) -> Self {
     Self {
       context_reset,
       context_destroy,
       core_callbacks: None,
-      core_data: None,
     }
   }
 }
@@ -657,10 +635,9 @@ impl Deinit for NoGLData {
   fn deinit(&mut self) {}
 }
 
-impl<T> Deinit for InstanceGLData<T> {
+impl Deinit for InstanceGLData {
   fn deinit(&mut self) {
     self.core_callbacks = None;
-    self.core_data = None;
   }
 }
 
@@ -684,8 +661,12 @@ impl<C, G> InstanceEnvironment<C, G> {
 
 #[macro_export]
 macro_rules! libretro_core {
-  (@Core gl_state_type($core:ty)) => { NoGLData };
-  (@GLCore gl_state_type($core:ty)) => { InstanceGLData<<$core as GLCore>::Context> };
+  (@Core GLState) => {
+    NoGLData
+  };
+  (@GLCore GLState) => {
+    InstanceGLData
+  };
   ($core:ty) => {
     libretro_core!($core: Core);
   };
@@ -694,14 +675,13 @@ macro_rules! libretro_core {
     mod __libretro_rs_gen {
       use core::ffi::c_char;
       use core::ffi::*;
-      use libretro_rs::libretro_core;
       use libretro_rs::ffi::*;
+      use libretro_rs::libretro_core;
       use libretro_rs::retro::*;
 
-      type GLState = libretro_core!(@$cb gl_state_type($core));
+  type GLState = libretro_core!(@$cb GLState);
 
-      static mut RETRO_INSTANCE: Instance<$core, GLState> =
-        Instance::<$core, GLState>::new(on_context_reset, on_context_destroy);
+      static mut RETRO_INSTANCE: Instance<$core, GLState> = Instance::<$core, GLState>::new(on_context_reset, on_context_destroy);
 
       #[no_mangle]
       extern "C" fn retro_api_version() -> c_uint {
