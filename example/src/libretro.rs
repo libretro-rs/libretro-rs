@@ -11,7 +11,7 @@ pub struct LibretroCore {
 }
 
 impl LibretroCore {
-  pub fn render_audio(&mut self, runtime: &mut impl Runtime) {
+  pub fn render_audio(&mut self, runtime: &mut impl Callbacks) {
     self.cpu.timer.wave(|n, val| {
       self.audio_buffer[(n * 2) + 0] = (val * 32767.0).clamp(-32768.0, 32767.0) as i16;
       self.audio_buffer[(n * 2) + 1] = (val * 32767.0).clamp(-32768.0, 32767.0) as i16;
@@ -20,7 +20,7 @@ impl LibretroCore {
     runtime.upload_audio_frame(&self.audio_buffer);
   }
 
-  pub fn render_video(&mut self, runtime: &mut impl Runtime) {
+  pub fn render_video(&mut self, callbacks: &mut impl Callbacks) {
     const PIXEL_SIZE: usize = 4;
     const PITCH: usize = PIXEL_SIZE * display::WIDTH;
 
@@ -35,7 +35,7 @@ impl LibretroCore {
 
     let width = display::WIDTH as u32;
     let height = display::HEIGHT as u32;
-    runtime.upload_video_frame(&self.frame_buffer, width, height, PITCH);
+    callbacks.upload_video_frame(&self.frame_buffer, width, height, PITCH);
   }
 
   fn set_rgb(&mut self, index: usize, color: Color) {
@@ -45,7 +45,7 @@ impl LibretroCore {
     self.frame_buffer[index + 3] = 0xff;
   }
 
-  pub fn update_input(&mut self, runtime: &mut impl Runtime) -> InputsPolled {
+  pub fn update_input(&mut self, runtime: &mut impl Callbacks) -> InputsPolled {
     let inputs_polled = runtime.poll_inputs();
     for key in keyboard::Keyboard::keys() {
       // todo: chip-8 has a very clunky mapping to a controller.
@@ -68,12 +68,12 @@ fn key_to_retro_button(key: keyboard::Key) -> JoypadButton {
   }
 }
 
-impl Core for LibretroCore {
+impl NoInitCore for LibretroCore {
   fn get_system_info() -> SystemInfo {
     SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), ext!["png"])
   }
 
-  fn load_game(env: &mut impl env::LoadGame<Self>, game: Game) -> Result<Self> {
+  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self> {
     env.set_pixel_format(PixelFormat::XRGB8888)?;
     match game {
       Game::Data { data, .. } => {
@@ -88,25 +88,25 @@ impl Core for LibretroCore {
     }
   }
 
-  fn get_system_av_info(&self, _env: &mut impl env::GetAvInfo<Self>) -> SystemAVInfo {
+  fn get_system_av_info(&self, _env: &mut impl env::GetAvInfo) -> SystemAVInfo {
     const WINDOW_SCALE: u16 = 8;
     const WINDOW_WIDTH: u16 = WINDOW_SCALE * display::WIDTH as u16;
     const WINDOW_HEIGHT: u16 = WINDOW_SCALE * display::HEIGHT as u16;
     SystemAVInfo::default_timings(GameGeometry::fixed(WINDOW_WIDTH, WINDOW_HEIGHT))
   }
 
-  fn reset(&mut self, _env: &mut impl env::Reset<Self>) {
-    todo!()
-  }
-
-  fn run(&mut self, _env: &mut impl env::Run<Self>, runtime: &mut impl Runtime) -> InputsPolled {
-    let inputs_polled = self.update_input(runtime);
+  fn run(&mut self, _env: &mut impl env::Run, callbacks: &mut impl Callbacks) -> InputsPolled {
+    let inputs_polled = self.update_input(callbacks);
 
     self.cpu.step_for(25);
 
-    self.render_audio(runtime);
-    self.render_video(runtime);
+    self.render_audio(callbacks);
+    self.render_video(callbacks);
     inputs_polled
+  }
+
+  fn reset(&mut self, _env: &mut impl env::Reset) {
+    todo!()
   }
 }
 

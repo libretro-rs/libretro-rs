@@ -1,116 +1,167 @@
+//! Types and macros for implementing libretro cores.
+//!
+//! The [`Core`] trait contains the essential libretro API functions;
+//! ['NoInitCore'] can be implemented instead if doing all initialization during
+//! `retro_load_game` is preferable. Optional libretro functions are provided
+//! in additional traits.
+//!
+//! The [`libretro_core`] macro takes a type that implements these traits and
+//! implements the C functions required by the libretro API.
+//!
+//! Cores should be well-behaved - they shouldn't panic, crash, or invoke
+//! undefined behavior, lest they take the frontend down with it.
+//! Likewise, cores shouldn't request a shutdown in lieu of panicking.
+//! If a core loads content successfully, it should continue to function until
+//! the user unloads it or shuts down the frontend.
+
 use crate::ffi::*;
 use crate::retro::*;
 use core::ffi::*;
 use core::ops::*;
 
-#[allow(unused_variables)]
-/// A libretro core.
+/// A basic libretro core.
 ///
-/// Each of the methods and associated functions corresponds to a C function in
-/// the libretro API, with additional parameters for the frontend-provided callbacks.
-/// Some methods return [`Result`] despite the corresponding C function having no
-/// return value so that implementers can use the `?` operator.
+/// No method is provided for `retro_deinit`, since it would be redundant with
+/// the [`Drop`] trait.
 pub trait Core: Sized {
-  /// Called during `retro_set_environment`.
-  fn set_environment(env: &mut impl env::SetEnvironment<Self>) {}
-
-  /// Called during `retro_init`. This function is provided for the sake of completeness; it's generally redundant
-  /// with [`Core::load_game`].
-  fn init(env: &mut impl env::Init<Self>) {}
-
   /// Called to get information about the core. This information can then be displayed in a frontend, or used to
   /// construct core-specific paths.
   fn get_system_info() -> SystemInfo;
 
-  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo<Self>) -> SystemAVInfo;
+  /// Called during `retro_set_environment`.
+  #[allow(unused_variables)]
+  fn set_environment(env: &mut impl env::SetEnvironment) {}
 
-  fn get_region(&self, env: &mut impl env::GetRegion<Self>) -> Region {
-    Region::NTSC
-  }
+  /// Called during `retro_init`.
+  fn init(env: &mut impl env::Init) -> Self;
 
+  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
+  /// required for the core to function properly.
+  fn load_game(&mut self, env: &mut impl env::LoadGame, game: Game) -> Result<()>;
+
+  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo) -> SystemAVInfo;
+
+  /// Called continuously once the core is initialized and a game is loaded.
+  ///
+  /// The core is expected to advance emulation by a single frame before returning.
+  /// The core must call [`Callbacks::poll_inputs`] at least once.
+  fn run(&mut self, env: &mut impl env::Run, callbacks: &mut impl Callbacks) -> InputsPolled;
+
+  /// Called when a player resets their game.
+  fn reset(&mut self, env: &mut impl env::Reset);
+
+  /// Called during `retro_unload_game`.
+  ///
+  /// This will be called before either `retro_deinit` or `retro_load_game`
+  /// and allows the core to free resources associated with `retro_load_game`.
+  /// This is usually not necessary in Rust since resources are automatically
+  /// freed when dropped.
+  #[allow(unused_variables)]
+  fn unload_game(&mut self, env: &mut impl env::UnloadGame) {}
+}
+
+/// An alternative to the [`Core`] trait which returns an instance of the
+/// implementing type on `load_game` rather than `init`.
+pub trait NoInitCore: Sized {
+  /// Called to get information about the core. This information can then be displayed in a frontend, or used to
+  /// construct core-specific paths.
+  fn get_system_info() -> SystemInfo;
+
+  /// Called during `retro_set_environment`.
+  #[allow(unused_variables)]
+  fn set_environment(env: &mut impl env::Environment) {}
+
+  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
+  /// required for the core to function properly.
+  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self>;
+
+  fn get_system_av_info(&self, env: &mut impl env::GetAvInfo) -> SystemAVInfo;
+
+  /// Called continuously once the core is initialized and a game is loaded.
+  ///
+  /// The core is expected to advance emulation by a single frame before returning.
+  /// The core must call [`Callbacks::poll_inputs`] at least once.
+  fn run(&mut self, env: &mut impl env::Run, callbacks: &mut impl Callbacks) -> InputsPolled;
+
+  /// Called when a player resets their game.
+  fn reset(&mut self, env: &mut impl env::Reset);
+
+  /// Called during `retro_unload_game`.
+  ///
+  /// This will be called before either `retro_deinit` or `retro_load_game`
+  /// and allows the core to free resources associated with `retro_load_game`.
+  /// This is usually not necessary in Rust since resources are automatically
+  /// freed when dropped.
+  #[allow(unused_variables)]
+  fn unload_game(&mut self, env: &mut impl env::UnloadGame) {}
+}
+
+/// Save state functions.
+pub trait SaveStateCore: Sized {
+  /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
+  /// not exceed the size returned here for subsequent saves.
+  fn serialize_size(&self, env: &mut impl env::SerializeSize) -> core::num::NonZeroUsize;
+
+  /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
+  /// bytes, where `size` is the value returned from `serialize_size`.
+  fn serialize(&self, env: &mut impl env::Serialize, data: &mut [u8]) -> Result<()>;
+
+  /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
+  /// bytes, where `size` is the value returned from `serialize_size`.
+  fn unserialize(&mut self, env: &mut impl env::Unserialize, data: &[u8]) -> Result<()>;
+}
+
+/// Implementation of `retro_set_controller_port_device`.
+pub trait DeviceTypeAwareCore: Sized {
   /// Called to associate a particular device with a particular port. A core is allowed to ignore this request.
   ///
   /// This function returns [`Result`] to make error handling easier.
   /// The libretro function `retro_set_controller_port_device` does not return a result to the frontend.
   fn set_controller_port_device(
     &mut self,
-    env: &mut impl env::SetPortDevice<Self>,
+    env: &mut impl env::SetPortDevice,
     port: DevicePort,
     device: DeviceTypeId,
-  ) -> Result<()> {
-    Err(CoreError::new())
-  }
+  ) -> Result<()>;
+}
 
-  /// Called when a player resets their game.
-  fn reset(&mut self, env: &mut impl env::Reset<Self>);
-
-  /// Called continuously once the core is initialized and a game is loaded.
-  ///
-  /// The core is expected to advance emulation by a single frame before returning.
-  /// The core must call [`Runtime::poll_inputs`] at least once.
-  fn run(&mut self, env: &mut impl env::Run<Self>, runtime: &mut impl Runtime) -> InputsPolled;
-
-  /// Called to determine the size of the save state buffer. This is only ever called once per run, and the core must
-  /// not exceed the size returned here for subsequent saves.
-  fn serialize_size(&self, env: &mut impl env::SerializeSize<Self>) -> usize {
-    0
-  }
-
-  /// Allows a core to save its internal state into the specified buffer. The buffer is guaranteed to be at least `size`
-  /// bytes, where `size` is the value returned from `serialize_size`.
-  fn serialize(&self, env: &mut impl env::Serialize<Self>, data: &mut [u8]) -> Result<()> {
-    Err(CoreError::new())
-  }
-
-  /// Allows a core to load its internal state from the specified buffer. The buffer is guaranteed to be at least `size`
-  /// bytes, where `size` is the value returned from `serialize_size`.
-  fn unserialize(&mut self, env: &mut impl env::Unserialize<Self>, data: &[u8]) -> Result<()> {
-    Err(CoreError::new())
-  }
-
-  fn cheat_reset(&mut self, env: &mut impl env::CheatReset<Self>) {}
-
+/// Cheat code functions.
+pub trait CheatsCore: Sized {
   /// Called when a user attempts to apply or remove a cheat code.
   ///
   /// This function returns [`Result`] to make error handling easier.
   /// The libretro function `retro_cheat_set` does not return a result to the frontend.
-  fn cheat_set(&mut self, env: &mut impl env::CheatSet<Self>, index: c_uint, enabled: bool, code: &CStr) -> Result<()> {
-    Err(CoreError::new())
-  }
+  fn cheat_set(&mut self, env: &mut impl env::CheatSet, index: c_uint, enabled: bool, code: &CStr) -> Result<()>;
 
-  /// Called when a new instance of the core is needed. The `env` parameter can be used to set-up and/or query values
-  /// required for the core to function properly.
-  fn load_game(env: &mut impl env::LoadGame<Self>, game: Game) -> Result<Self>;
-
-  fn load_game_special(env: &mut impl env::LoadGameSpecial<Self>, game_type: GameType, info: Game) -> Result<Self> {
-    Err(CoreError::new())
-  }
-
-  fn unload_game(&mut self, env: &mut impl env::UnloadGame<Self>) {}
-
-  fn get_memory_size(&self, env: &mut impl env::GetMemorySize<Self>, id: MemoryType) -> Result<usize> {
-    Err(CoreError::new())
-  }
-
-  fn get_memory_data(&self, env: &mut impl env::GetMemoryData<Self>, id: MemoryType) -> Result<&mut [u8]> {
-    Err(CoreError::new())
-  }
+  fn cheat_reset(&mut self, env: &mut impl env::CheatReset);
 }
 
-pub unsafe trait GLRenderingCore: Core {
+/// Functions for getting memory regions (e.g. save RAM.)
+pub trait GetMemoryRegionCore: Sized {
+  fn get_memory_size(&self, env: &mut impl env::GetMemorySize, id: MemoryType) -> usize;
+
+  fn get_memory_data(&self, env: &mut impl env::GetMemoryData, id: MemoryType) -> Option<&mut [u8]>;
+}
+
+/// Implementation of `retro_load_game_special`. Should be avoided if possible.
+pub trait SpecialGameCore: Core {
+  fn load_game_special(&mut self, env: &mut impl env::LoadGameSpecial, game_type: GameType, info: Game) -> Result<()>;
+}
+
+/// Implementation of `retro_get_region`.
+///
+/// This is vestigial functionality; RetroArch no longer calls this function.
+/// If a core does not implement this trait, the [`libretro_core`] macro will
+/// return [`RETRO_REGION_NTSC`], which is the de facto default value.
+pub trait RegionAwareCore: Sized {
+  fn get_region(&self, env: &mut impl env::GetRegion) -> Region;
+}
+
+/// OpenGL context management functions.
+pub unsafe trait OpenGLCore: Sized {
   fn context_reset(&mut self, callbacks: GLContextCallbacks);
 
-  fn context_destroy(&mut self) {}
-}
-
-pub unsafe trait GLContext<C: GLRenderingCore>: Sized {
-  unsafe fn create(callbacks: GLContextCallbacks, core: &mut C) -> Self;
-
-  unsafe fn reset(&mut self, callbacks: GLContextCallbacks, core: &mut C) {
-    *self = Self::create(callbacks, core);
-  }
-
-  unsafe fn destroy(&mut self) {}
+  fn context_destroy(&mut self);
 }
 
 /// Rust interface for [`retro_system_info`].
@@ -176,7 +227,7 @@ impl From<SystemInfo> for retro_system_info {
   }
 }
 
-pub trait Runtime {
+pub trait Callbacks {
   /// Sends audio data to the `libretro` frontend.
   fn upload_audio_frame(&mut self, frame: &[i16]) -> usize;
 
@@ -194,7 +245,7 @@ pub trait Runtime {
 
   /// When using hardware rendering, informs the `libretro` frontend that core
   /// has finished rendering to the frame buffer.
-  fn use_hardware_frame_buffer(&mut self, render_callbacks: &impl HWRenderEnabled, width: c_uint, height: c_uint);
+  fn use_hardware_frame_buffer(&mut self, hw_render_enabled: &impl HWRenderEnabled, width: c_uint, height: c_uint);
 
   /// Polls all input devices.
   /// Must be called at least once on every call to [`Environment::run`]
@@ -204,11 +255,7 @@ pub trait Runtime {
   fn is_joypad_button_pressed(&self, port: DevicePort, btn: JoypadButton) -> bool;
 }
 
-pub trait Deinit {
-  fn deinit(&mut self);
-}
-
-impl Runtime for Callbacks {
+impl Callbacks for InstanceCallbacks {
   fn upload_audio_frame(&mut self, frame: &[i16]) -> usize {
     unsafe { self.upload_audio_frame(frame) }
   }
@@ -225,8 +272,8 @@ impl Runtime for Callbacks {
     unsafe { self.repeat_video_frame() }
   }
 
-  fn use_hardware_frame_buffer(&mut self, render_callbacks: &impl HWRenderEnabled, width: c_uint, height: c_uint) {
-    unsafe { self.use_hardware_frame_buffer(render_callbacks, width, height) }
+  fn use_hardware_frame_buffer(&mut self, hw_render_enabled: &impl HWRenderEnabled, width: c_uint, height: c_uint) {
+    unsafe { self.use_hardware_frame_buffer(hw_render_enabled, width, height) }
   }
 
   fn poll_inputs(&mut self) -> InputsPolled {
@@ -259,18 +306,365 @@ impl<'a> Deref for RetroVariable<'a> {
   }
 }
 
-/// This is the glue layer between a [Core] and the `libretro` API.
+/// This is the glue layer between a [`Core`] and the `libretro` API.
 #[doc(hidden)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Instance<C, G> {
-  environment: InstanceEnvironment<C, G>,
+pub struct Instance<C> {
+  environment: InstanceEnvironment,
   system: Option<C>,
-  callbacks: Callbacks,
+  callbacks: InstanceCallbacks,
+}
+
+impl<C> Instance<C> {
+  pub const fn new(context_reset: non_null_retro_hw_context_reset_t, context_destroy: non_null_retro_hw_context_reset_t) -> Self {
+    Self {
+      environment: InstanceEnvironment {
+        cb: None,
+        gl: InstanceGLState::new(context_reset, context_destroy),
+      },
+      callbacks: InstanceCallbacks::new(),
+      system: None,
+    }
+  }
+
+  pub fn on_set_audio_sample(&mut self, cb: non_null_retro_audio_sample_t) {
+    self.callbacks.audio_sample = Some(cb);
+  }
+
+  pub fn on_set_audio_sample_batch(&mut self, cb: non_null_retro_audio_sample_batch_t) {
+    self.callbacks.audio_sample_batch = Some(cb);
+  }
+
+  pub fn on_set_input_poll(&mut self, cb: non_null_retro_input_poll_t) {
+    self.callbacks.input_poll = Some(cb);
+  }
+
+  pub fn on_set_input_state(&mut self, cb: non_null_retro_input_state_t) {
+    self.callbacks.input_state = Some(cb);
+  }
+
+  pub fn on_set_video_refresh(&mut self, cb: non_null_retro_video_refresh_t) {
+    self.callbacks.video_refresh = Some(cb);
+  }
+
+  pub fn on_deinit(&mut self) {
+    self.system = None;
+  }
+}
+
+// The following code exploits the fact that inherent impls can shadow trait
+// impls. The inherent impl provides a functioning implementation when the core
+// implements specific traits, and the trait impl provides default methods for
+// when it doesn't. Either way, the libretro_core macro can call the method
+// using the same syntax and without the need to disambiguate the call.
+
+impl<C: Core> Instance<C> {
+  pub fn on_get_system_info(&mut self, info: &mut retro_system_info) {
+    *info = C::get_system_info().into()
+  }
+
+  pub fn on_set_environment(&mut self, env: non_null_retro_environment_t) {
+    self.environment.cb = Some(env);
+    C::set_environment(&mut self.environment);
+  }
+
+  pub unsafe fn on_init(&mut self) {
+    self.system = Some(C::init(&mut self.environment));
+  }
+
+  pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
+    let env = &mut self.environment;
+    let game = game.as_ref().map_or_else(Game::default, Game::from);
+    self.system.as_mut().unwrap_unchecked().load_game(env, game).is_ok()
+  }
+
+  pub unsafe fn on_get_system_av_info(&mut self, info: &mut retro_system_av_info) {
+    let env = &mut self.environment;
+    let system = self.system.as_mut().unwrap_unchecked();
+    *info = system.get_system_av_info(env).into();
+  }
+
+  pub unsafe fn on_run(&mut self) {
+    let env = &mut self.environment;
+    let callbacks = &mut self.callbacks;
+    self.system.as_mut().unwrap_unchecked().run(env, callbacks);
+  }
+
+  pub unsafe fn on_reset(&mut self) {
+    self.system.as_mut().unwrap_unchecked().reset(&mut self.environment)
+  }
+
+  pub unsafe fn on_unload_game(&mut self) {
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().unload_game(env)
+  }
+}
+
+#[doc(hidden)]
+pub trait CoreFallbacks {
+  fn on_get_system_info(&mut self, info: &mut retro_system_info);
+
+  fn on_set_environment(&mut self, env: non_null_retro_environment_t);
+
+  unsafe fn on_init(&mut self);
+
+  unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool;
+
+  unsafe fn on_get_system_av_info(&mut self, info: &mut retro_system_av_info);
+
+  unsafe fn on_run(&mut self);
+
+  unsafe fn on_reset(&mut self);
+
+  unsafe fn on_unload_game(&mut self);
+}
+
+impl<C: NoInitCore> CoreFallbacks for Instance<C> {
+  fn on_get_system_info(&mut self, info: &mut retro_system_info) {
+    *info = C::get_system_info().into()
+  }
+
+  fn on_set_environment(&mut self, env: non_null_retro_environment_t) {
+    self.environment.cb = Some(env);
+    C::set_environment(&mut self.environment);
+  }
+
+  unsafe fn on_init(&mut self) {}
+
+  unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool {
+    let env = &mut self.environment;
+    let game = game.as_ref().map_or_else(Game::default, Game::from);
+    self.system = C::load_game(env, game).ok();
+    self.system.is_some()
+  }
+
+  unsafe fn on_get_system_av_info(&mut self, info: &mut retro_system_av_info) {
+    let env = &mut self.environment;
+    let system = self.system.as_mut().unwrap_unchecked();
+    *info = system.get_system_av_info(env).into();
+  }
+
+  unsafe fn on_run(&mut self) {
+    let env = &mut self.environment;
+    let callbacks = &mut self.callbacks;
+    self.system.as_mut().unwrap_unchecked().run(env, callbacks);
+  }
+
+  unsafe fn on_reset(&mut self) {
+    self.system.as_mut().unwrap_unchecked().reset(&mut self.environment)
+  }
+
+  unsafe fn on_unload_game(&mut self) {
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().unload_game(env)
+  }
+}
+
+impl<C: SaveStateCore> Instance<C> {
+  /// Invoked by a `libretro` frontend, with the `retro_serialize_size` API call.
+  pub unsafe fn on_serialize_size(&mut self) -> usize {
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().serialize_size(env).get()
+  }
+
+  /// Invoked by a `libretro` frontend, with the `retro_serialize` API call.
+  pub unsafe fn on_serialize(&mut self, data: *mut (), size: usize) -> bool {
+    let data = core::slice::from_raw_parts_mut(data as *mut u8, size);
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().serialize(env, data).is_ok()
+  }
+
+  /// Invoked by a `libretro` frontend, with the `retro_unserialize` API call.
+  pub unsafe fn on_unserialize(&mut self, data: *const (), size: usize) -> bool {
+    let data = core::slice::from_raw_parts(data as *const u8, size);
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().unserialize(env, data).is_ok()
+  }
+}
+
+#[doc(hidden)]
+pub trait SaveStateCoreFallbacks {
+  unsafe fn on_serialize_size(&mut self) -> usize {
+    0
+  }
+
+  unsafe fn on_serialize(&mut self, _data: *mut (), _size: usize) -> bool {
+    false
+  }
+
+  unsafe fn on_unserialize(&mut self, _data: *const (), _size: usize) -> bool {
+    false
+  }
+}
+impl<C> SaveStateCoreFallbacks for Instance<C> {}
+
+impl<C: DeviceTypeAwareCore> Instance<C> {
+  /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
+  pub unsafe fn on_set_controller_port_device(&mut self, port: DevicePort, device: DeviceTypeId) {
+    let core = self.system.as_mut().unwrap_unchecked();
+    let env = &mut self.environment;
+    let _ = core.set_controller_port_device(env, port, device);
+  }
+}
+
+#[doc(hidden)]
+pub trait DeviceTypeAwareCoreFallbacks {
+  unsafe fn on_set_controller_port_device(&mut self, _port: DevicePort, _device: DeviceTypeId) {}
+}
+impl<C> DeviceTypeAwareCoreFallbacks for Instance<C> {}
+
+impl<C: CheatsCore> Instance<C> {
+  /// Invoked by a `libretro` frontend, with the `retro_cheat_set` API call.
+  ///
+  /// # Safety
+  /// `code` must be a valid argument to [`CStr::from_ptr`].
+  pub unsafe fn on_cheat_set(&mut self, index: c_uint, enabled: bool, code: *const c_char) {
+    let code = CStr::from_ptr(code);
+    let env = &mut self.environment;
+    let _ = self.system.as_mut().unwrap_unchecked().cheat_set(env, index, enabled, code);
+  }
+
+  /// Invoked by a `libretro` frontend, with the `retro_cheat_reset` API call.
+  pub unsafe fn on_cheat_reset(&mut self) {
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().cheat_reset(env)
+  }
+}
+
+#[doc(hidden)]
+pub trait CheatsCoreFallbacks {
+  unsafe fn on_cheat_set(&mut self, _index: c_uint, _enabled: bool, _code: *const c_char) {}
+
+  unsafe fn on_cheat_reset(&mut self) {}
+}
+impl<C> CheatsCoreFallbacks for Instance<C> {}
+
+impl<C: GetMemoryRegionCore> Instance<C> {
+  /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.
+  pub unsafe fn on_get_memory_data(&mut self, id: MemoryType) -> *mut () {
+    let env = &mut self.environment;
+    self
+      .system
+      .as_mut()
+      .unwrap_unchecked()
+      .get_memory_data(env, id)
+      .map_or_else(std::ptr::null_mut, |data| data.as_mut_ptr() as *mut ())
+  }
+
+  /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
+  pub unsafe fn on_get_memory_size(&mut self, id: MemoryType) -> usize {
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().get_memory_size(env, id)
+  }
+}
+
+#[doc(hidden)]
+pub trait GetMemoryRegionCoreFallbacks {
+  unsafe fn on_get_memory_data(&mut self, _id: MemoryType) -> *mut () {
+    core::ptr::null_mut()
+  }
+
+  unsafe fn on_get_memory_size(&mut self, _id: MemoryType) -> usize {
+    0
+  }
+}
+impl<C> GetMemoryRegionCoreFallbacks for Instance<C> {}
+
+impl<C: SpecialGameCore> Instance<C> {
+  /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
+  pub unsafe fn on_load_game_special(&mut self, game_type: GameType, info: &retro_game_info, _num_info: usize) -> bool {
+    let env = &mut self.environment;
+    self
+      .system
+      .as_mut()
+      .unwrap_unchecked()
+      .load_game_special(env, game_type, info.into())
+      .is_ok()
+  }
+}
+
+#[doc(hidden)]
+pub trait SpecialGameCoreFallbacks {
+  unsafe fn on_load_game_special(&mut self, _game_type: GameType, _info: &retro_game_info, _num_info: usize) -> bool {
+    false
+  }
+}
+impl<C> SpecialGameCoreFallbacks for Instance<C> {}
+
+impl<C: RegionAwareCore> Instance<C> {
+  /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
+  pub unsafe fn on_get_region(&mut self) -> c_uint {
+    let env = &mut self.environment;
+    self.system.as_mut().unwrap_unchecked().get_region(env).into()
+  }
+}
+
+#[doc(hidden)]
+pub trait RegionAwareCoreFallbacks {
+  unsafe fn on_get_region(&mut self) -> c_uint {
+    RETRO_REGION_NTSC.into()
+  }
+}
+impl<C> RegionAwareCoreFallbacks for Instance<C> {}
+
+impl<C: OpenGLCore> Instance<C> {
+  pub unsafe fn on_context_reset(&mut self) {
+    let callbacks = self.environment.gl.core_callbacks.unwrap_unchecked();
+    self.system.as_mut().unwrap_unchecked().context_reset(callbacks);
+  }
+
+  pub unsafe fn on_context_destroy(&mut self) {
+    self.system.as_mut().unwrap_unchecked().context_destroy();
+  }
+}
+
+#[doc(hidden)]
+pub trait OpenGLCoreFallbacks {
+  unsafe fn on_context_reset(&mut self) {}
+
+  unsafe fn on_context_destroy(&mut self) {}
+}
+impl<C> OpenGLCoreFallbacks for Instance<C> {}
+
+#[doc(hidden)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InstanceEnvironment {
+  cb: retro_environment_t,
+  gl: InstanceGLState,
+}
+
+impl InstanceEnvironment {
+  pub const fn new(cb: retro_environment_t, gl: InstanceGLState) -> Self {
+    Self { cb, gl }
+  }
+}
+
+impl env::Environment for InstanceEnvironment {
+  fn get_ptr(&self) -> non_null_retro_environment_t {
+    unsafe { self.cb.unwrap_unchecked() }
+  }
+}
+
+impl env::LoadGame for InstanceEnvironment {
+  fn set_hw_render_gl(&mut self, options: GLOptions) -> env::Result<GLRenderEnabled> {
+    use crate::retro::env::Environment;
+    let mut data: retro_hw_render_callback = options.into();
+    data.context_destroy = Some(self.gl.context_destroy);
+    data.context_reset = Some(self.gl.context_reset);
+    unsafe {
+      let data: retro_hw_render_callback = self.cmd(RETRO_ENVIRONMENT_SET_HW_RENDER, data)?;
+      self.gl.core_callbacks = Some(GLContextCallbacks {
+        get_current_framebuffer_cb: data.get_current_framebuffer.unwrap_unchecked(),
+        get_proc_address_cb: data.get_proc_address.unwrap_unchecked(),
+      });
+    }
+    Ok(GLRenderEnabled(()))
+  }
 }
 
 #[doc(hidden)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Callbacks {
+pub struct InstanceCallbacks {
   audio_sample: retro_audio_sample_t,
   audio_sample_batch: retro_audio_sample_batch_t,
   input_poll: retro_input_poll_t,
@@ -278,7 +672,7 @@ pub struct Callbacks {
   video_refresh: retro_video_refresh_t,
 }
 
-impl Callbacks {
+impl InstanceCallbacks {
   pub const fn new() -> Self {
     Self {
       audio_sample: None,
@@ -305,7 +699,7 @@ impl Callbacks {
     self.video_refresh.unwrap_unchecked()(core::ptr::null(), 0, 0, 0)
   }
 
-  unsafe fn use_hardware_frame_buffer(&mut self, _render_callbacks: &impl HWRenderEnabled, width: c_uint, height: c_uint) {
+  unsafe fn use_hardware_frame_buffer(&mut self, _hw_render_enabled: &impl HWRenderEnabled, width: c_uint, height: c_uint) {
     self.video_refresh.unwrap_unchecked()(RETRO_HW_FRAME_BUFFER_VALID, width, height, 0)
   }
 
@@ -324,304 +718,15 @@ impl Callbacks {
   }
 }
 
-impl<C> Instance<C, NoGLData>
-where
-  C: Core,
-  Self: ValidInstance,
-{
-  pub const fn new(context_reset: non_null_retro_hw_context_reset_t, context_destroy: non_null_retro_hw_context_reset_t) -> Self {
-    Self {
-      environment: InstanceEnvironment {
-        cb: None,
-        gl: NoGLData::new(context_reset, context_destroy),
-        phantom: core::marker::PhantomData,
-      },
-      callbacks: Callbacks::new(),
-      system: None,
-    }
-  }
-}
-
-impl<C> Instance<C, InstanceGLData>
-where
-  C: GLRenderingCore,
-  Self: ValidInstance,
-{
-  pub const fn new(context_reset: non_null_retro_hw_context_reset_t, context_destroy: non_null_retro_hw_context_reset_t) -> Self {
-    Self {
-      environment: InstanceEnvironment {
-        cb: None,
-        gl: InstanceGLData {
-          context_reset,
-          context_destroy,
-          core_callbacks: None,
-        },
-        phantom: core::marker::PhantomData,
-      },
-      system: None,
-      callbacks: Callbacks::new(),
-    }
-  }
-}
-
-impl<C: Core, G> Instance<C, G> {
-  /// Invoked by a `libretro` frontend, with the `retro_get_system_info` API call.
-  pub fn on_get_system_info(&mut self, info: &mut retro_system_info) {
-    *info = C::get_system_info().into();
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_get_system_av_info` API call.
-  pub unsafe fn on_get_system_av_info(&mut self, info: &mut retro_system_av_info) {
-    let env = &mut self.environment;
-    let system = self.system.as_mut().unwrap_unchecked();
-    *info = system.get_system_av_info(env).into();
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_init` API call.
-  pub unsafe fn on_init(&mut self) {
-    C::init(&mut self.environment);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_deinit` API call.
-  pub fn on_deinit(&mut self)
-  where
-    G: Deinit,
-  {
-    self.system = None;
-    self.callbacks = Callbacks::new();
-    self.environment.deinit();
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_environment` API call.
-  pub fn on_set_environment(&mut self, env: non_null_retro_environment_t) {
-    self.environment.cb = Some(env);
-    C::set_environment(&mut self.environment);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_audio_sample` API call.
-  pub fn on_set_audio_sample(&mut self, cb: non_null_retro_audio_sample_t) {
-    self.callbacks.audio_sample = Some(cb);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_audio_sample_batch` API call.
-  pub fn on_set_audio_sample_batch(&mut self, cb: non_null_retro_audio_sample_batch_t) {
-    self.callbacks.audio_sample_batch = Some(cb);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_input_poll` API call.
-  pub fn on_set_input_poll(&mut self, cb: non_null_retro_input_poll_t) {
-    self.callbacks.input_poll = Some(cb);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_input_state` API call.
-  pub fn on_set_input_state(&mut self, cb: non_null_retro_input_state_t) {
-    self.callbacks.input_state = Some(cb);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_video_refresh` API call.
-  pub fn on_set_video_refresh(&mut self, cb: non_null_retro_video_refresh_t) {
-    self.callbacks.video_refresh = Some(cb);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_set_controller_port_device` API call.
-  pub unsafe fn on_set_controller_port_device(&mut self, port: DevicePort, device: DeviceTypeId) {
-    let core = self.system.as_mut().unwrap_unchecked();
-    let env = &mut self.environment;
-    let _ = core.set_controller_port_device(env, port, device);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_reset` API call.
-  pub unsafe fn on_reset(&mut self) {
-    self.system.as_mut().unwrap_unchecked().reset(&mut self.environment)
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_run` API call.
-  pub unsafe fn on_run(&mut self)
-  where
-    InstanceEnvironment<C, G>: env::Run<C>,
-  {
-    let env = &mut self.environment;
-    let callbacks = &mut self.callbacks;
-    self.system.as_mut().unwrap_unchecked().run(env, callbacks);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_serialize_size` API call.
-  pub unsafe fn on_serialize_size(&mut self) -> usize {
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().serialize_size(env)
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_serialize` API call.
-  pub unsafe fn on_serialize(&mut self, data: *mut (), size: usize) -> bool {
-    let data = core::slice::from_raw_parts_mut(data as *mut u8, size);
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().serialize(env, data).is_ok()
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_unserialize` API call.
-  pub unsafe fn on_unserialize(&mut self, data: *const (), size: usize) -> bool {
-    let data = core::slice::from_raw_parts(data as *const u8, size);
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().unserialize(env, data).is_ok()
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_cheat_reset` API call.
-  pub unsafe fn on_cheat_reset(&mut self) {
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().cheat_reset(env)
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_cheat_set` API call.
-  ///
-  /// # Safety
-  /// `code` must be a valid argument to [`CStr::from_ptr`].
-  pub unsafe fn on_cheat_set(&mut self, index: c_uint, enabled: bool, code: *const c_char) {
-    let code = CStr::from_ptr(code);
-    let env = &mut self.environment;
-    let _ = self.system.as_mut().unwrap_unchecked().cheat_set(env, index, enabled, code);
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_load_game` API call.
-  ///
-  /// # Safety
-  /// `game` must remain valid until [`Instance::on_unload_game`] is called.
-  pub unsafe fn on_load_game(&mut self, game: *const retro_game_info) -> bool
-  where
-    InstanceEnvironment<C, G>: env::LoadGame<C>,
-  {
-    let env = &mut self.environment;
-    let game = game.as_ref().map_or_else(Game::default, Game::from);
-    self.system = C::load_game(env, game).ok();
-    self.system.is_some()
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_load_game_special` API call.
-  pub unsafe fn on_load_game_special(&mut self, game_type: GameType, info: &retro_game_info, _num_info: usize) -> bool {
-    let env = &mut self.environment;
-    self.system = C::load_game_special(env, game_type, info.into()).ok();
-    self.system.is_some()
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_unload_game` API call.
-  pub unsafe fn on_unload_game(&mut self) {
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().unload_game(env)
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_get_region` API call.
-  pub unsafe fn on_get_region(&mut self) -> c_uint {
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().get_region(env).into()
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_get_memory_data` API call.
-  pub unsafe fn on_get_memory_data(&mut self, id: MemoryType) -> *mut () {
-    let env = &mut self.environment;
-    self
-      .system
-      .as_mut()
-      .unwrap_unchecked()
-      .get_memory_data(env, id)
-      .ok()
-      .map_or_else(std::ptr::null_mut, |data| data.as_mut_ptr() as *mut ())
-  }
-
-  /// Invoked by a `libretro` frontend, with the `retro_get_memory_size` API call.
-  pub unsafe fn on_get_memory_size(&mut self, id: MemoryType) -> usize {
-    let env = &mut self.environment;
-    self.system.as_mut().unwrap_unchecked().get_memory_size(env, id).unwrap_or(0)
-  }
-}
-
-pub trait ValidInstance {}
-impl<C: Core> ValidInstance for Instance<C, NoGLData> {}
-impl<C: GLRenderingCore> ValidInstance for Instance<C, InstanceGLData> {}
-
-impl<C: Core> Instance<C, NoGLData> {
-  pub fn on_context_destroy(&mut self) {}
-
-  pub fn on_context_reset(&mut self) {}
-}
-
-impl<C> Instance<C, InstanceGLData>
-where
-  C: GLRenderingCore,
-  Self: ValidInstance,
-{
-  pub unsafe fn on_context_destroy(&mut self) {
-    self.system.as_mut().unwrap_unchecked().context_destroy();
-  }
-
-  pub unsafe fn on_context_reset(&mut self) {
-    let callbacks = self.environment.gl.core_callbacks.unwrap_unchecked();
-    self.system.as_mut().unwrap_unchecked().context_reset(callbacks);
-  }
-}
-
-impl<C, G: Deinit> Deinit for InstanceEnvironment<C, G> {
-  fn deinit(&mut self) {
-    self.cb = None;
-    self.gl.deinit();
-  }
-}
-
-impl<C: Core, G> env::Environment<C> for InstanceEnvironment<C, G> {
-  fn get_ptr(&self) -> non_null_retro_environment_t {
-    unsafe { self.cb.unwrap_unchecked() }
-  }
-}
-
-impl<C: Core> env::LoadGame<C> for InstanceEnvironment<C, NoGLData> {
-  fn set_hw_render_gl(&mut self, _options: GLOptions) -> env::Result<GLRenderEnabled>
-  where
-    C: GLRenderingCore,
-  {
-    Err(CommandError::new())
-  }
-}
-
-impl<C: GLRenderingCore> env::LoadGame<C> for InstanceEnvironment<C, InstanceGLData> {
-  fn set_hw_render_gl(&mut self, options: GLOptions) -> env::Result<GLRenderEnabled>
-  where
-    C: GLRenderingCore,
-  {
-    use crate::retro::env::Environment;
-    let mut data: retro_hw_render_callback = options.into();
-    data.context_destroy = Some(self.gl.context_destroy);
-    data.context_reset = Some(self.gl.context_reset);
-    unsafe {
-      let data: retro_hw_render_callback = self.cmd(RETRO_ENVIRONMENT_SET_HW_RENDER, data)?;
-      self.gl.core_callbacks = Some(GLContextCallbacks {
-        get_current_framebuffer_cb: data.get_current_framebuffer.unwrap_unchecked(),
-        get_proc_address_cb: data.get_proc_address.unwrap_unchecked(),
-      });
-    }
-    Ok(GLRenderEnabled(()))
-  }
-}
-
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct NoGLData;
-
-impl NoGLData {
-  pub const fn new(
-    _context_reset: non_null_retro_hw_context_reset_t,
-    _context_destroy: non_null_retro_hw_context_reset_t,
-  ) -> Self {
-    NoGLData
-  }
-}
-
-#[doc(hidden)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct InstanceGLData {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InstanceGLState {
   context_reset: non_null_retro_hw_context_reset_t,
   context_destroy: non_null_retro_hw_context_reset_t,
   core_callbacks: Option<GLContextCallbacks>,
 }
 
-impl InstanceGLData {
+impl InstanceGLState {
   pub const fn new(context_reset: non_null_retro_hw_context_reset_t, context_destroy: non_null_retro_hw_context_reset_t) -> Self {
     Self {
       context_reset,
@@ -631,46 +736,9 @@ impl InstanceGLData {
   }
 }
 
-impl Deinit for NoGLData {
-  fn deinit(&mut self) {}
-}
-
-impl Deinit for InstanceGLData {
-  fn deinit(&mut self) {
-    self.core_callbacks = None;
-  }
-}
-
-#[doc(hidden)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct InstanceEnvironment<C, G> {
-  cb: retro_environment_t,
-  gl: G,
-  phantom: core::marker::PhantomData<C>,
-}
-
-impl<C, G> InstanceEnvironment<C, G> {
-  pub fn new(cb: retro_environment_t, gl: G) -> Self {
-    Self {
-      cb,
-      gl,
-      phantom: core::marker::PhantomData,
-    }
-  }
-}
-
 #[macro_export]
 macro_rules! libretro_core {
-  (@Core GLState) => {
-    NoGLData
-  };
-  (@GLCore GLState) => {
-    InstanceGLData
-  };
   ($core:ty) => {
-    libretro_core!($core: Core);
-  };
-  ($core:ty: $cb:ident) => {
     #[doc(hidden)]
     mod __libretro_rs_gen {
       use core::ffi::c_char;
@@ -679,9 +747,7 @@ macro_rules! libretro_core {
       use libretro_rs::libretro_core;
       use libretro_rs::retro::*;
 
-  type GLState = libretro_core!(@$cb GLState);
-
-      static mut RETRO_INSTANCE: Instance<$core, GLState> = Instance::<$core, GLState>::new(on_context_reset, on_context_destroy);
+      static mut RETRO_INSTANCE: Instance<$core> = Instance::new(on_context_reset, on_context_destroy);
 
       #[no_mangle]
       extern "C" fn retro_api_version() -> c_uint {
@@ -808,12 +874,11 @@ macro_rules! libretro_core {
         RETRO_INSTANCE.on_get_memory_size(id)
       }
 
-      // Only used as a function pointer, doesn't need no_mangle
+      // These don't need no_mangle; they're only used through pointers
       unsafe extern "C" fn on_context_reset() {
         RETRO_INSTANCE.on_context_reset()
       }
 
-      // Only used as a function pointer, doesn't need no_mangle
       unsafe extern "C" fn on_context_destroy() {
         RETRO_INSTANCE.on_context_destroy()
       }
