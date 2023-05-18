@@ -1,5 +1,33 @@
 use core::fmt::{Display, Formatter};
 use std::error::Error;
+use std::fmt::Debug;
+
+#[derive(Clone)]
+pub struct LoadGameError<C>(C);
+
+impl<T> LoadGameError<T> {
+  pub fn new(init_state: T) -> Self {
+    Self(init_state)
+  }
+
+  pub fn into_inner(self) -> T {
+    self.0
+  }
+}
+
+impl<T> Debug for LoadGameError<T> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "LoadGameError")
+  }
+}
+
+impl<T> Display for LoadGameError<T> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "core failed to load game")
+  }
+}
+
+impl<T> Error for LoadGameError<T> {}
 
 macro_rules! retro_error {
   ($name:ident, $description:expr) => {
@@ -36,5 +64,3 @@ impl From<CommandError> for CoreError {
     Self::new()
   }
 }
-
-pub type Result<T> = ::core::result::Result<T, CoreError>;

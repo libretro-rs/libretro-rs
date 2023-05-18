@@ -57,15 +57,24 @@ where
   }
 }
 
-impl<'a> UnsafeFrom<Option<&'a c_char>> for Option<&'a CStr> {
-  unsafe fn unsafe_from(str: Option<&'a c_char>) -> Self {
-    str.map(|ptr| CStr::from_ptr(ptr))
+impl<'a> UnsafeFrom<&'a c_char> for &'a CStr {
+  unsafe fn unsafe_from(ptr: &'a c_char) -> Self {
+    CStr::from_ptr(ptr)
   }
 }
 
-impl<'a> UnsafeFrom<Option<&'a c_char>> for Option<&'a CUtf8> {
-  unsafe fn unsafe_from(str: Option<&'a c_char>) -> Self {
-    str.map(|ptr| CUtf8::from_c_str_unchecked(CStr::from_ptr(ptr)))
+impl<'a> UnsafeFrom<&'a c_char> for &'a CUtf8 {
+  unsafe fn unsafe_from(ptr: &'a c_char) -> Self {
+    CUtf8::from_c_str_unchecked(CStr::from_ptr(ptr))
+  }
+}
+
+impl<T, R> UnsafeFrom<Option<T>> for Option<R>
+where
+  R: UnsafeFrom<T>,
+{
+  unsafe fn unsafe_from(x: Option<T>) -> Self {
+    x.map(|x| R::unsafe_from(x))
   }
 }
 

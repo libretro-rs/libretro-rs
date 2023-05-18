@@ -1,57 +1,91 @@
 use crate::ffi::*;
+use crate::retro::convert::*;
 use ::core::ffi::*;
 use c_utf8::CUtf8;
 
-/// Represents the possible ways that a frontend can pass game information to a core.
-#[derive(Debug, Clone)]
-pub enum Game<'a> {
-  /// Used if a core supports "no game" and no game was selected.
-  ///
-  /// * `meta` contains implementation-specific metadata, if present.
-  ///
-  /// **Note**: "No game" support is hinted with the `RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME` key.
-  None { meta: Option<&'a CStr> },
-  /// Used if a core doesn't need paths, and a game was selected.
-  ///
-  /// * `meta` contains implementation-specific metadata, if present.
-  /// * `data` contains the entire contents of the game.
-  Data { meta: Option<&'a CStr>, data: &'a [u8] },
-  /// Used if a core needs paths, and a game was selected.
-  ///
-  /// * `meta` contains implementation-specific metadata, if present.
-  /// * `path` contains the entire absolute path of the game.
-  Path { meta: Option<&'a CStr>, path: &'a CUtf8 },
-}
+/// Game data loaded from a file.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct GameData(retro_game_info);
 
-impl<'a> Default for Game<'a> {
-  fn default() -> Self {
-    Game::None { meta: None }
+impl GameData {
+  pub unsafe fn from_raw(info: retro_game_info) -> Self {
+    Self(info)
+  }
+
+  /// The game's data
+  pub fn data(&self) -> &[u8] {
+    unsafe { core::slice::from_raw_parts(self.0.data.cast(), self.0.size) }
+  }
+
+  /// The absolute path to the game file, if available.
+  pub fn path(&self) -> Option<&CUtf8> {
+    unsafe { self.0.path.as_ref().unsafe_into() }
+  }
+
+  /// Implementation-specific metadata.
+  pub fn meta(&self) -> Option<&CStr> {
+    unsafe { self.0.meta.as_ref().unsafe_into() }
   }
 }
 
-impl<'a> From<Option<&retro_game_info>> for Game<'a> {
-  fn from(info: Option<&retro_game_info>) -> Self {
-    match info {
-      None => Game::None { meta: None },
-      Some(info) => Game::from(info),
+/// Full path to a game.
+///
+/// * `meta` contains implementation-specific metadata, if present.
+/// * `path` contains the entire absolute path of the game.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct GamePath(retro_game_info);
+
+impl GamePath {
+  pub unsafe fn from_raw(info: retro_game_info) -> Self {
+    Self(info)
+  }
+
+  /// The absolute path to the game file, if available.
+  pub fn path(&self) -> &CUtf8 {
+    unsafe { (&*self.0.path).unsafe_into() }
+  }
+
+  /// Implementation-specific metadata.
+  pub fn meta(&self) -> Option<&CStr> {
+    unsafe { self.0.meta.as_ref().unsafe_into() }
+  }
+}
+
+/// Game data loaded from a file.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct SpecialGameData(retro_game_info);
+
+impl SpecialGameData {
+  pub unsafe fn from_raw(info: retro_game_info) -> Self {
+    Self(info)
+  }
+
+  pub fn as_ref(&self) -> Option<&GameData> {
+    if self.0.data.is_null() {
+      None
+    } else {
+      Some(unsafe { &*(&self.0 as *const retro_game_info).cast() })
     }
   }
 }
 
-impl<'a> From<&retro_game_info> for Game<'a> {
-  fn from(game: &retro_game_info) -> Game<'a> {
-    let meta = unsafe { game.meta.as_ref().map(|x| CStr::from_ptr(x)) };
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct SpecialGamePath(retro_game_info);
 
-    match (game.path.is_null(), game.data.is_null()) {
-      (true, true) => Game::None { meta },
-      (_, false) => unsafe {
-        let data = ::core::slice::from_raw_parts(game.data as *const u8, game.size);
-        Game::Data { meta, data }
-      },
-      (false, _) => unsafe {
-        let path = CUtf8::from_c_str_unchecked(CStr::from_ptr(game.path));
-        Game::Path { meta, path }
-      },
+impl SpecialGamePath {
+  pub unsafe fn from_raw(info: retro_game_info) -> Self {
+    Self(info)
+  }
+
+  pub fn as_ref(&self) -> Option<&GamePath> {
+    if self.0.path.is_null() {
+      None
+    } else {
+      Some(unsafe { &*(&self.0 as *const retro_game_info).cast() })
     }
   }
 }

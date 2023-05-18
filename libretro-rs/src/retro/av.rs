@@ -251,6 +251,9 @@ impl From<Message> for retro_message {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct SoftwareRenderEnabled(pub(crate) ());
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GLRenderEnabled(pub(crate) ());
 
 pub trait HWRenderEnabled: private::Sealed {}

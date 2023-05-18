@@ -1,8 +1,6 @@
-mod convert;
-
 use crate::ffi::*;
+pub use crate::retro::convert::*;
 use crate::retro::*;
-pub use convert::*;
 
 pub type Result<T> = core::result::Result<T, CommandError>;
 
@@ -211,6 +209,8 @@ pub trait LoadGame: Environment {
     GetAvInfo::set_pixel_format(self, format)
   }
 
+  fn set_hw_render_none(&mut self) -> Result<()>;
+
   fn set_hw_render_gl(&mut self, options: GLOptions) -> Result<GLRenderEnabled>;
 }
 
@@ -247,6 +247,9 @@ impl<T: Environment> GetMemoryData for T {}
 
 pub trait GetMemorySize: Environment {}
 impl<T: Environment> GetMemorySize for T {}
+
+pub trait Deinit: Environment {}
+impl<T: Environment> Deinit for T {}
 
 unsafe fn with_ref(cb: non_null_retro_environment_t, cmd: c_uint, data: &impl CommandData) -> Result<()> {
   if cb(cmd, data as *const _ as *mut c_void) {

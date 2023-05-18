@@ -1,6 +1,7 @@
 use crate::*;
 
 use libretro_rs::c_utf8::c_utf8;
+use libretro_rs::retro::env::{Init, LoadGame, UnloadGame};
 use libretro_rs::retro::*;
 use libretro_rs::{ext, libretro_core};
 
@@ -68,24 +69,26 @@ fn key_to_retro_button(key: keyboard::Key) -> JoypadButton {
   }
 }
 
-impl NoInitCore for LibretroCore {
+impl Core for LibretroCore {
+  type Init = ();
+
   fn get_system_info() -> SystemInfo {
     SystemInfo::new(c_utf8!("chip8.rs"), c_utf8!(env!("CARGO_PKG_VERSION")), ext!["png"])
   }
 
-  fn load_game(env: &mut impl env::LoadGame, game: Game) -> Result<Self> {
-    env.set_pixel_format(PixelFormat::XRGB8888)?;
-    match game {
-      Game::Data { data, .. } => {
-        let core = LibretroCore {
-          cpu: cpu::Cpu::new(&data),
-          audio_buffer: [0; timer::AUDIO_BUFFER_SIZE * 2],
-          frame_buffer: [0; display::AREA * std::mem::size_of::<i32>()],
-        };
-        Ok(core)
-      }
-      _ => Err(CoreError::new()),
+  fn init(_env: &mut impl Init) -> Self::Init {
+    ()
+  }
+
+  fn load_game(env: &mut impl LoadGame, init_state: Self::Init, game: &GameData) -> Result<Self, LoadGameError<Self::Init>> {
+    if env.set_pixel_format(PixelFormat::XRGB8888).is_err() {
+      return Err(LoadGameError::new(init_state));
     }
+    Ok(LibretroCore {
+      cpu: cpu::Cpu::new(game.data()),
+      audio_buffer: [0; timer::AUDIO_BUFFER_SIZE * 2],
+      frame_buffer: [0; display::AREA * std::mem::size_of::<i32>()],
+    })
   }
 
   fn get_system_av_info(&self, _env: &mut impl env::GetAvInfo) -> SystemAVInfo {
@@ -107,6 +110,10 @@ impl NoInitCore for LibretroCore {
 
   fn reset(&mut self, _env: &mut impl env::Reset) {
     todo!()
+  }
+
+  fn unload_game(self, _env: &mut impl UnloadGame) -> Self::Init {
+    ()
   }
 }
 
