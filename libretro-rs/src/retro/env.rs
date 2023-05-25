@@ -1,6 +1,11 @@
+pub use crate::convert::*;
 use crate::ffi::*;
-pub use crate::retro::convert::*;
+use crate::retro::pixel::{Format, ORGB1555, RGB565, XRGB8888};
 use crate::retro::*;
+use libretro_rs_ffi::retro_pixel_format::{
+  RETRO_PIXEL_FORMAT_0RGB1555, RETRO_PIXEL_FORMAT_RGB565, RETRO_PIXEL_FORMAT_XRGB8888,
+};
+use std::marker::PhantomData;
 
 pub type Result<T> = core::result::Result<T, CommandError>;
 
@@ -92,7 +97,11 @@ pub trait Environment: Sized {
 
   /// Queries the path of the "core assets" directory.
   fn get_core_assets_directory(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY).unsafe_into() }
+    unsafe {
+      self
+        .get(RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY)
+        .unsafe_into()
+    }
   }
 
   /// Queries the path of the save directory.
@@ -109,7 +118,11 @@ pub trait Environment: Sized {
   /// a better place to put it. This is now discouraged, and if possible, cores should try to use
   /// the new GET_SAVE_DIRECTORY.
   fn get_system_directory(&self) -> Result<Option<&CStr>> {
-    unsafe { self.get(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY).unsafe_into() }
+    unsafe {
+      self
+        .get(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY)
+        .unsafe_into()
+    }
   }
 
   fn get_variable(&self, key: &impl AsRef<CStr>) -> Result<Option<&CStr>> {
@@ -198,15 +211,33 @@ pub trait LoadGame: Environment {
   /// This function can be called on a per-game basis, as certain games an implementation can play
   /// might be particularly demanding.
   fn set_performance_level(&mut self, performance_level: impl Into<c_uint>) -> Result<()> {
-    unsafe { self.set(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &performance_level.into()) }
+    unsafe {
+      self.set(
+        RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL,
+        &performance_level.into(),
+      )
+    }
   }
 
-  /// Sets the internal pixel format used by the implementation.
-  /// The default pixel format is RETRO_PIXEL_FORMAT_0RGB1555.
-  /// This pixel format however, is deprecated (see enum retro_pixel_format).
-  /// If the call returns false, the frontend does not support this pixel format.
-  fn set_pixel_format(&mut self, format: PixelFormat) -> Result<()> {
-    GetAvInfo::set_pixel_format(self, format)
+  fn set_pixel_format_0rgb1555<F>(
+    &mut self,
+    current_format: Format<F>,
+  ) -> core::result::Result<Format<ORGB1555>, Format<F>> {
+    GetAvInfo::set_pixel_format_0rgb1555(self, current_format)
+  }
+
+  fn set_pixel_format_xrgb8888<F>(
+    &mut self,
+    current_format: Format<F>,
+  ) -> core::result::Result<Format<XRGB8888>, Format<F>> {
+    GetAvInfo::set_pixel_format_xrgb8888(self, current_format)
+  }
+
+  fn set_pixel_format_rgb565<F>(
+    &mut self,
+    current_format: Format<F>,
+  ) -> core::result::Result<Format<RGB565>, Format<F>> {
+    GetAvInfo::set_pixel_format_rgb565(self, current_format)
   }
 
   fn set_hw_render_none(&mut self) -> Result<()>;
@@ -223,12 +254,52 @@ pub enum Origin {
 }
 
 pub trait GetAvInfo: Environment {
-  /// Sets the internal pixel format used by the implementation.
-  /// The default pixel format is RETRO_PIXEL_FORMAT_0RGB1555.
-  /// This pixel format however, is deprecated (see enum retro_pixel_format).
-  /// If the call returns false, the frontend does not support this pixel format.
-  fn set_pixel_format(&mut self, format: PixelFormat) -> Result<()> {
-    unsafe { self.set(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &(format as c_int)) }
+  #[allow(unused_variables)]
+  fn set_pixel_format_0rgb1555<F>(
+    &mut self,
+    current_format: Format<F>,
+  ) -> core::result::Result<Format<ORGB1555>, Format<F>> {
+    unsafe {
+      self
+        .set(
+          RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,
+          &RETRO_PIXEL_FORMAT_0RGB1555,
+        )
+        .map(|_| Format(PhantomData))
+        .map_err(|_| current_format)
+    }
+  }
+
+  #[allow(unused_variables)]
+  fn set_pixel_format_xrgb8888<F>(
+    &mut self,
+    current_format: Format<F>,
+  ) -> core::result::Result<Format<XRGB8888>, Format<F>> {
+    unsafe {
+      self
+        .set(
+          RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,
+          &RETRO_PIXEL_FORMAT_XRGB8888,
+        )
+        .map(|_| Format(PhantomData))
+        .map_err(|_| current_format)
+    }
+  }
+
+  #[allow(unused_variables)]
+  fn set_pixel_format_rgb565<F>(
+    &mut self,
+    current_format: Format<F>,
+  ) -> core::result::Result<Format<RGB565>, Format<F>> {
+    unsafe {
+      self
+        .set(
+          RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,
+          &RETRO_PIXEL_FORMAT_RGB565,
+        )
+        .map(|_| Format(PhantomData))
+        .map_err(|_| current_format)
+    }
   }
 }
 impl<T: Environment> GetAvInfo for T {}
@@ -251,7 +322,11 @@ impl<T: Environment> GetMemorySize for T {}
 pub trait Deinit: Environment {}
 impl<T: Environment> Deinit for T {}
 
-unsafe fn with_ref(cb: non_null_retro_environment_t, cmd: c_uint, data: &impl CommandData) -> Result<()> {
+unsafe fn with_ref(
+  cb: non_null_retro_environment_t,
+  cmd: c_uint,
+  data: &impl CommandData,
+) -> Result<()> {
   if cb(cmd, data as *const _ as *mut c_void) {
     Ok(())
   } else {
@@ -259,7 +334,11 @@ unsafe fn with_ref(cb: non_null_retro_environment_t, cmd: c_uint, data: &impl Co
   }
 }
 
-unsafe fn with_mut(cb: non_null_retro_environment_t, cmd: c_uint, data: &mut impl CommandData) -> Result<()> {
+unsafe fn with_mut(
+  cb: non_null_retro_environment_t,
+  cmd: c_uint,
+  data: &mut impl CommandData,
+) -> Result<()> {
   if cb(cmd, data as *mut _ as *mut c_void) {
     Ok(())
   } else {
@@ -270,3 +349,30 @@ unsafe fn with_mut(cb: non_null_retro_environment_t, cmd: c_uint, data: &mut imp
 pub extern "C" fn null_environment(_cmd: c_uint, _data: *mut c_void) -> bool {
   false
 }
+
+/// Marker trait for types that are valid arguments to the environment callback.
+///
+/// Any type implementing this trait must be FFI-safe. Structs should be `#[repr(C)]` or a
+/// `#[repr(transparent)]` newtype. Numeric enums should have the appropriate primitive
+/// representation, which is typically either `#[repr(core::ffi::c_uint)]` for
+/// `const unsigned` arguments or `#[repr(core::ffi::c_int)]` for `const enum` arguments.
+///
+/// Care must still be taken when calling any of the generic unsafe `[RetroEnvironment]` methods to
+/// ensure the type used is appropriate for the environment command, as specified in `libretro.h`.
+pub trait CommandData {}
+impl CommandData for () {}
+impl CommandData for bool {}
+impl CommandData for c_int {}
+impl CommandData for c_uint {}
+impl CommandData for Option<&c_char> {}
+impl CommandData for Option<&c_void> {}
+impl CommandData for retro_hw_render_callback {}
+impl CommandData for retro_game_geometry {}
+impl CommandData for GameGeometry {}
+impl CommandData for retro_log_callback {}
+impl CommandData for retro_message {}
+impl CommandData for Message {}
+impl CommandData for retro_pixel_format {}
+impl CommandData for retro_system_av_info {}
+impl CommandData for SystemAVInfo {}
+impl CommandData for retro_variable {}

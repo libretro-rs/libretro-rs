@@ -17,3 +17,5 @@ experimental = []
 [dependencies]
 libretro-rs-ffi = { path = "../libretro-rs-ffi" }
 c_utf8 = "0.1.0"
+bitbybit = "1.2.1"
+arbitrary-int = "1.2.6"

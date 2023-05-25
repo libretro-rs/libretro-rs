@@ -57,10 +57,19 @@ macro_rules! retro_error {
 }
 
 retro_error!(CoreError, "a libretro API function call did not succeed");
-retro_error!(CommandError, "a libretro environment command did not succeed");
+retro_error!(
+  CommandError,
+  "a libretro environment command did not succeed"
+);
 
 impl From<CommandError> for CoreError {
   fn from(_value: CommandError) -> Self {
+    Self::new()
+  }
+}
+
+impl<T> From<crate::retro::av::pixel::Format<T>> for CoreError {
+  fn from(_value: crate::retro::av::pixel::Format<T>) -> Self {
     Self::new()
   }
 }

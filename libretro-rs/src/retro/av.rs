@@ -250,10 +250,48 @@ impl From<Message> for retro_message {
   }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Framebuffer<'a, T> {
+  data: &'a [T],
+  width: u32,
+  height: u32,
+  pitch: u32,
+}
+
+impl<'a, T> Framebuffer<'a, T> {
+  pub fn new(data: &'a [T], width: u32) -> Self {
+    let (height, remainder) = (data.len() / width as usize, data.len() % width as usize);
+    if remainder != 0 {
+      panic!("framebuffer length must be divisible by its stride.")
+    }
+    Self {
+      data,
+      width,
+      height: height as u32,
+      pitch: width,
+    }
+  }
+
+  pub fn data(&self) -> &'a [T] {
+    self.data
+  }
+
+  pub fn width(&self) -> u32 {
+    self.width
+  }
+
+  pub fn height(&self) -> u32 {
+    self.height
+  }
+
+  pub fn pitch(&self) -> u32 {
+    self.pitch
+  }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct SoftwareRenderEnabled(pub(crate) ());
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct GLRenderEnabled(pub(crate) ());
 
 pub trait HWRenderEnabled: private::Sealed {}
@@ -374,5 +412,50 @@ impl GLOptions {
 impl From<GLOptions> for retro_hw_render_callback {
   fn from(value: GLOptions) -> Self {
     value.0
+  }
+}
+
+/// Pixel formats.
+pub mod pixel {
+  use arbitrary_int::{u5, u6};
+  use bitbybit::bitfield;
+  use std::marker::PhantomData;
+
+  #[derive(Debug, PartialEq, Eq, Hash)]
+  pub struct Format<T>(pub(crate) PhantomData<T>);
+
+  #[bitfield(u16, default: 0)]
+  #[derive(Debug, PartialEq, Eq, Hash)]
+  pub struct ORGB1555 {
+    #[bits(10..=14, rw)]
+    r: u5,
+    #[bits(5..=9, rw)]
+    g: u5,
+    #[bits(0..=4, rw)]
+    b: u5,
+  }
+
+  #[bitfield(u32, default: 0)]
+  #[derive(Debug, PartialEq, Eq, Hash)]
+  pub struct XRGB8888 {
+    #[bits(24..=31, rw)]
+    x: u8,
+    #[bits(16..=23, rw)]
+    r: u8,
+    #[bits(8..=15, rw)]
+    g: u8,
+    #[bits(0..=7, rw)]
+    b: u8,
+  }
+
+  #[bitfield(u16, default: 0)]
+  #[derive(Debug, PartialEq, Eq, Hash)]
+  pub struct RGB565 {
+    #[bits(11..=15, rw)]
+    r: u5,
+    #[bits(5..=10, rw)]
+    g: u6,
+    #[bits(0..=4, rw)]
+    b: u5,
   }
 }
