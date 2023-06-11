@@ -1,6 +1,7 @@
 use crate::ffi::*;
 use core::ffi::*;
 use core::ops::*;
+use std::convert::Into;
 
 /// Represents the set of regions supported by `libretro`.
 #[non_exhaustive]
@@ -250,25 +251,55 @@ impl From<Message> for retro_message {
   }
 }
 
-pub struct Framebuffer<'a, T> {
+pub struct Frame<'a, T> {
   data: &'a [T],
   width: u32,
   height: u32,
   pitch: u32,
 }
 
-impl<'a, T> Framebuffer<'a, T> {
-  pub fn new(data: &'a [T], width: u32) -> Self {
-    let (height, remainder) = (data.len() / width as usize, data.len() % width as usize);
-    if remainder != 0 {
-      panic!("framebuffer length must be divisible by its stride.")
-    }
+impl<'a, T> Frame<'a, T> {
+  pub fn from_2d_array<const W: usize, const H: usize>(data: &'a [[T; W]; H]) -> Self {
+    let width: u32 = W.try_into().expect("W should fit in u32");
+    let height: u32 = H.try_into().expect("H should fit in u32");
+    let (_, data, _) = unsafe { data.align_to::<T>() };
     Self {
       data,
       width,
-      height: height as u32,
+      height,
       pitch: width,
     }
+  }
+
+  pub fn from_2d_slice<const W: usize>(data: &'a [[T; W]]) -> Self {
+    let width: u32 = W.try_into().expect("W should fit in u32");
+    let height: u32 = data.len().try_into().expect("data.len() should fit in u32");
+    let (_, data, _) = unsafe { data.align_to::<T>() };
+    Self {
+      data,
+      width,
+      height,
+      pitch: width,
+    }
+  }
+
+  pub fn new(data: &'a [T], width: u32, height: u32) -> Self {
+    assert_eq!(
+      width as usize * height as usize,
+      data.len(),
+      "width * height should equal data.len()"
+    );
+    Self {
+      data,
+      width,
+      height,
+      pitch: width,
+    }
+  }
+
+  pub fn with_pitch(mut self, pitch: u32) -> Self {
+    self.pitch = pitch;
+    self
   }
 
   pub fn data(&self) -> &'a [T] {

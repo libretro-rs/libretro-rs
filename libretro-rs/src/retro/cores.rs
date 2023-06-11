@@ -249,7 +249,7 @@ pub trait Callbacks {
     &mut self,
     enabled: &SoftwareRenderEnabled,
     pixel_format: &Format<P>,
-    framebuffer: &Framebuffer<'_, P>,
+    framebuffer: &Frame<'_, P>,
   );
 
   /// Explicitly informs the `libretro` frontend to repeat the previous video frame.
@@ -286,7 +286,7 @@ impl Callbacks for InstanceCallbacks {
     &mut self,
     enabled: &SoftwareRenderEnabled,
     pixel_format: &Format<P>,
-    framebuffer: &Framebuffer<'_, P>,
+    framebuffer: &Frame<'_, P>,
   ) {
     unsafe { self.upload_video_frame(enabled, pixel_format, framebuffer) }
   }
@@ -727,7 +727,7 @@ impl InstanceCallbacks {
     &mut self,
     _enabled: &SoftwareRenderEnabled,
     _pixel_format: &Format<P>,
-    framebuffer: &Framebuffer<'_, P>,
+    framebuffer: &Frame<'_, P>,
   ) {
     self.video_refresh.unwrap_unchecked()(
       framebuffer.data().as_ptr() as *const c_void,

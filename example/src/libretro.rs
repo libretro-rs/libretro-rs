@@ -40,8 +40,9 @@ impl LibretroCore {
     }
 
     let width = display::WIDTH as u32;
-    let framebuffer = Framebuffer::new(&self.frame_buffer, width);
-    callbacks.upload_video_frame(&self.rendering_mode, &self.pixel_format, &framebuffer);
+    let height = display::HEIGHT as u32;
+    let frame = Frame::new(&self.frame_buffer, width, height);
+    callbacks.upload_video_frame(&self.rendering_mode, &self.pixel_format, &frame);
   }
 
   fn set_rgb(&mut self, index: usize, color: XRGB8888) {
